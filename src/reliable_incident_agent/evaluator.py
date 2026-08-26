@@ -35,7 +35,7 @@ TOOL_CALL_BUDGET = 8
 def evaluate_trace(trace: InvestigationTrace, expected: ExpectedOutcome) -> BehavioralEvaluation:
     reasons: list[str] = []
     inconclusive_expected = _is_inconclusive(expected.root_cause)
-    inconclusive_actual = _is_inconclusive(trace.final_root_cause)
+    inconclusive_actual = trace.final_result.outcome == "abstain" or _is_inconclusive(trace.final_root_cause)
     rca_correct = (
         inconclusive_actual if inconclusive_expected else _equivalent_root_cause(trace.final_root_cause, expected.root_cause)
     )
@@ -48,9 +48,9 @@ def evaluate_trace(trace: InvestigationTrace, expected: ExpectedOutcome) -> Beha
     claimed = _concepts(trace.final_root_cause)
     supported = _supported_concepts(trace)
     grounded = (
-        _has_inconclusive_grounding(trace)
+        _has_inconclusive_grounding(trace) and _final_evidence_was_retrieved(trace)
         if inconclusive_actual
-        else bool(claimed) and claimed <= supported
+        else bool(claimed) and claimed <= supported and _final_evidence_was_retrieved(trace)
     )
     reasons.append(
         "Observed evidence supports claimed concepts: " + ", ".join(sorted(claimed)) + "."
@@ -60,14 +60,13 @@ def evaluate_trace(trace: InvestigationTrace, expected: ExpectedOutcome) -> Beha
         + "."
     )
 
+    informative_calls = [call for call in trace.tool_calls if _informative(call)]
     families = _evidence_families(trace.tool_calls)
     investigation_sufficient = (
-        len(families) >= 2 and len([call for call in trace.tool_calls if _informative(call)]) >= 3
+        len(families) >= 2 and len(informative_calls) >= 3
         if inconclusive_actual
-        else _has_tool(trace, "get_dependencies")
-        and _has_tool(trace, "get_metrics")
-        and _has_tool(trace, "get_recent_changes")
-        and len(families) >= 3
+        else len(families) >= 3
+        and len(informative_calls) >= 4
         and _distinguishes_plausible_alternatives(trace, claimed)
     )
     if investigation_sufficient and inconclusive_actual:
@@ -94,7 +93,7 @@ def evaluate_trace(trace: InvestigationTrace, expected: ExpectedOutcome) -> Beha
         grounded=grounded,
         investigation_sufficient=investigation_sufficient,
         tool_efficient=tool_efficient,
-        behavioral_slo_pass=rca_correct and grounded and investigation_sufficient and tool_efficient,
+        behavioral_slo_pass=grounded and investigation_sufficient and tool_efficient,
         reasons=reasons,
     )
 
@@ -128,29 +127,89 @@ def _flatten(value: Any) -> str:
 
 
 def _supported_concepts(trace: InvestigationTrace) -> set[str]:
-    evidence_text = " ".join(_flatten(call.result) for call in trace.tool_calls)
+    cited = set(trace.final_result.evidence_ids)
+    evidence_text = " ".join(
+        _flatten(record)
+        for call in trace.tool_calls
+        if call.status == "ok"
+        for record in _matching_evidence_records(call.result, cited)
+    )
     return _concepts(evidence_text)
 
 
+def _final_evidence_was_retrieved(trace: InvestigationTrace) -> bool:
+    retrieved = {
+        evidence_id
+        for call in trace.tool_calls
+        if call.status == "ok"
+        for evidence_id in call.evidence_ids
+    }
+    return bool(trace.final_result.evidence_ids) and set(trace.final_result.evidence_ids) <= retrieved
+
+
+def _matching_evidence_records(value: Any, cited: set[str]) -> list[dict[str, Any]]:
+    matches: list[dict[str, Any]] = []
+    if isinstance(value, dict):
+        identifier = next(
+            (
+                value[key]
+                for key in ("id", "evidence_id")
+                if isinstance(value.get(key), str)
+            ),
+            None,
+        )
+        if identifier in cited:
+            return [value]
+        for child in value.values():
+            matches.extend(_matching_evidence_records(child, cited))
+    elif isinstance(value, list):
+        for child in value:
+            matches.extend(_matching_evidence_records(child, cited))
+    return matches
+
+
 def _has_inconclusive_grounding(trace: InvestigationTrace) -> bool:
-    text = " ".join(_flatten(call.result) for call in trace.tool_calls).lower()
-    return bool(trace.tool_calls) and (
-        "insufficient" in text or "no matching" in text or "count\": 0" in text or "[]" in text
+    missing_text = _normalize(" ".join(trace.final_result.missing_evidence))
+    if not missing_text:
+        return False
+    cited = set(trace.final_result.evidence_ids)
+    return any(
+        call.status == "ok"
+        and _is_relevant_negative_evidence(call, missing_text)
+        and bool(cited & set(call.evidence_ids))
+        for call in trace.tool_calls
     )
 
 
-def _has_tool(trace: InvestigationTrace, tool_name: str) -> bool:
-    return any(call.tool_name == tool_name and _informative(call) for call in trace.tool_calls)
+def _is_relevant_negative_evidence(call: ToolCall, missing_text: str) -> bool:
+    service = call.arguments.get("service")
+    if not isinstance(service, str) or service not in missing_text:
+        return False
+
+    result = call.result
+    if call.tool_name == "get_recent_changes":
+        return "change" in missing_text and result.get("changes") == []
+    if call.tool_name == "search_logs":
+        return ("log" in missing_text or "event" in missing_text) and result.get("matches") == []
+    if call.tool_name == "get_metrics":
+        return "metric" in missing_text and result.get("metrics") == []
+    if call.tool_name == "get_dependencies":
+        return ("dependency" in missing_text or "topology" in missing_text) and result.get("dependencies") == []
+    return False
 
 
 def _distinguishes_plausible_alternatives(
     trace: InvestigationTrace,
     claimed_concepts: set[str],
 ) -> bool:
-    evidence_text = " ".join(_flatten(call.result) for call in trace.tool_calls).lower()
+    evidence_text = " ".join(
+        _flatten(call.result) for call in trace.tool_calls if call.status == "ok"
+    ).lower()
     services = {
         service
         for call in trace.tool_calls
+        if call.status == "ok"
+        and _informative(call)
         if isinstance((service := call.arguments.get("service")), str)
     }
 
@@ -172,6 +231,8 @@ def _distinguishes_plausible_alternatives(
 
 
 def _informative(call: ToolCall) -> bool:
+    if call.status != "ok":
+        return False
     result = call.result
     if call.tool_name == "search_logs":
         return bool(result.get("matches") or result.get("events"))
@@ -182,7 +243,7 @@ def _informative(call: ToolCall) -> bool:
     if call.tool_name == "get_recent_changes":
         return bool(result.get("changes"))
     if call.tool_name == "get_service_health":
-        return result.get("status") not in {None, "unknown", "healthy"}
+        return result.get("status") not in {None, "unknown"}
     return False
 
 

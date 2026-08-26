@@ -1,30 +1,57 @@
-.PHONY: install seed api app build demo test lint
+.PHONY: install run seed api app build demo test live-smoke lint
 
-PNPM ?= /Users/meka/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback/pnpm
-NODE_BIN ?= /Users/meka/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin
-export PATH := $(NODE_BIN):$(PATH)
+BUNDLED_PNPM := /Users/meka/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback/pnpm
+PNPM ?= $(if $(wildcard $(BUNDLED_PNPM)),$(BUNDLED_PNPM),pnpm)
+PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
+VENV ?= .venv
+PY_DEPS_STAMP := $(VENV)/.dependencies-installed
+NODE_DEPS_STAMP := node_modules/.dependencies-installed
 
-install:
-	python3 -m pip install -r requirements.txt
-	$(PNPM) install
+install: $(PY_DEPS_STAMP) $(NODE_DEPS_STAMP)
+
+$(PY_DEPS_STAMP): requirements.txt
+	test -x $(VENV)/bin/python || python3 -m venv $(VENV)
+	$(VENV)/bin/python -m pip install -r requirements.txt
+	touch $(PY_DEPS_STAMP)
+
+$(NODE_DEPS_STAMP): package.json pnpm-lock.yaml
+	@if command -v "$(PNPM)" >/dev/null 2>&1; then \
+		"$(PNPM)" install; \
+	elif command -v corepack >/dev/null 2>&1; then \
+		corepack pnpm install; \
+	elif command -v npx >/dev/null 2>&1; then \
+		npx --yes pnpm@11.19.0 install; \
+	else \
+		echo "Node package setup needs pnpm, corepack, or npx." >&2; \
+		exit 1; \
+	fi
+	touch $(NODE_DEPS_STAMP)
+
+run: install
+	@echo "Starting API and UI; the first Python import may take a moment..."
+	@PYTHONPATH=src PNPM="$(PNPM)" $(VENV)/bin/python -m reliable_incident_agent.local_dev dev
 
 seed:
-	PYTHONPATH=src python3 -c "from reliable_incident_agent.db import init_db; print(init_db())"
+	PYTHONPATH=src $(PYTHON) -c "from reliable_incident_agent.db import init_db; print(init_db())"
 
-api:
-	PYTHONPATH=src python3 -m uvicorn reliable_incident_agent.api:app --reload --host 127.0.0.1 --port 8000
+api: install
+	@PYTHONPATH=src $(VENV)/bin/python -m reliable_incident_agent.local_dev api
 
-app:
-	$(PNPM) run dev
+app: install
+	@PYTHONPATH=src PNPM="$(PNPM)" $(VENV)/bin/python -m reliable_incident_agent.local_dev app
 
-build:
-	$(PNPM) run build
+build: install
+	@PYTHONPATH=src PNPM="$(PNPM)" $(VENV)/bin/python -m reliable_incident_agent.local_dev frontend-build
 
 demo:
-	PYTHONPATH=src python3 scripts/run_demo.py
+	PYTHONPATH=src $(PYTHON) scripts/run_demo.py
 
-test:
-	PYTHONPATH=src python3 -m pytest -q
+test: install
+	PYTHONPATH=src $(PYTHON) -m pytest -q tests
+	@PYTHONPATH=src PNPM="$(PNPM)" $(VENV)/bin/python -m reliable_incident_agent.local_dev frontend-test
+
+live-smoke: install
+	@PYTHONPATH=src $(VENV)/bin/python -m reliable_incident_agent.local_dev live-smoke
 
 lint:
-	PYTHONPATH=src python3 -m ruff check src tests scripts
+	PYTHONPATH=src $(PYTHON) -m ruff check --ignore UP045 src tests live_tests scripts

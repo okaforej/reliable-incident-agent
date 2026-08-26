@@ -3,8 +3,15 @@
 from .evaluator import evaluate_trace
 from .investigator import run_investigation
 from .models import (
+    ActionProposal,
     BehavioralEvaluation,
+    ChatMessageRequest,
+    ChatMessageResponse,
+    ComparisonRequest,
+    ComparisonResponse,
+    ComparisonSummary,
     ExpectedOutcome,
+    HealthResponse,
     InvestigationRequest,
     InvestigationResponse,
     InvestigationTrace,
@@ -12,8 +19,15 @@ from .models import (
 )
 
 __all__ = [
+    "ActionProposal",
     "BehavioralEvaluation",
+    "ChatMessageRequest",
+    "ChatMessageResponse",
+    "ComparisonRequest",
+    "ComparisonResponse",
+    "ComparisonSummary",
     "ExpectedOutcome",
+    "HealthResponse",
     "InvestigationRequest",
     "InvestigationResponse",
     "InvestigationTrace",

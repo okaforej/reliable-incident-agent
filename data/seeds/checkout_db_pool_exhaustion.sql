@@ -1,8 +1,14 @@
 PRAGMA foreign_keys = ON;
 
 DROP TABLE IF EXISTS evaluations;
+DROP TABLE IF EXISTS investigation_events;
 DROP TABLE IF EXISTS tool_calls;
+DROP TABLE IF EXISTS action_proposals;
+DROP TABLE IF EXISTS chat_messages;
+DROP TABLE IF EXISTS comparisons;
 DROP TABLE IF EXISTS investigation_runs;
+DROP TABLE IF EXISTS replay_instances;
+DROP TABLE IF EXISTS replay_state;
 DROP TABLE IF EXISTS expected_outcomes;
 DROP TABLE IF EXISTS changes;
 DROP TABLE IF EXISTS logs;
@@ -28,6 +34,7 @@ CREATE TABLE incidents (
   ended_at TEXT NOT NULL,
   affected_service TEXT NOT NULL,
   customer_impact TEXT NOT NULL,
+  target_sli TEXT NOT NULL,
   symptoms_json TEXT NOT NULL
 );
 
@@ -90,14 +97,43 @@ CREATE TABLE expected_outcomes (
   root_cause TEXT NOT NULL
 );
 
+CREATE TABLE replay_instances (
+  id TEXT PRIMARY KEY,
+  scenario_id TEXT NOT NULL REFERENCES scenarios(id),
+  status TEXT NOT NULL,
+  checkout_db_pool_connections INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE investigation_runs (
   id TEXT PRIMARY KEY,
   scenario_id TEXT NOT NULL REFERENCES scenarios(id),
-  mode TEXT NOT NULL,
+  replay_instance_id TEXT NOT NULL REFERENCES replay_instances(id),
+  agent_config_id TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'completed', 'failed')),
   created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
   incident_id TEXT NOT NULL,
   incident_description TEXT NOT NULL,
-  final_root_cause TEXT NOT NULL
+  final_root_cause TEXT,
+  final_result_json TEXT,
+  hypotheses_json TEXT,
+  prompt_version TEXT,
+  tool_schema_version TEXT,
+  model TEXT,
+  provider_metadata_json TEXT,
+  error TEXT
+);
+
+CREATE TABLE investigation_events (
+  run_id TEXT NOT NULL REFERENCES investigation_runs(id),
+  event_id INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  type TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  payload_json TEXT NOT NULL,
+  PRIMARY KEY (run_id, event_id)
 );
 
 CREATE TABLE tool_calls (
@@ -105,8 +141,44 @@ CREATE TABLE tool_calls (
   run_id TEXT NOT NULL REFERENCES investigation_runs(id),
   sequence INTEGER NOT NULL,
   tool_name TEXT NOT NULL,
+  purpose TEXT NOT NULL,
   arguments_json TEXT NOT NULL,
-  result_json TEXT NOT NULL
+  result_json TEXT NOT NULL,
+  evidence_ids_json TEXT NOT NULL,
+  status TEXT NOT NULL,
+  duration_ms INTEGER NOT NULL
+);
+
+CREATE TABLE comparisons (
+  id TEXT PRIMARY KEY,
+  scenario_id TEXT NOT NULL REFERENCES scenarios(id),
+  created_at TEXT NOT NULL,
+  baseline_run_id TEXT NOT NULL REFERENCES investigation_runs(id),
+  candidate_run_id TEXT NOT NULL REFERENCES investigation_runs(id)
+);
+
+CREATE TABLE chat_messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id TEXT NOT NULL REFERENCES investigation_runs(id),
+  role TEXT NOT NULL,
+  content TEXT NOT NULL,
+  evidence_ids_json TEXT NOT NULL,
+  tool_calls_json TEXT NOT NULL,
+  action_proposal_id TEXT
+);
+
+CREATE TABLE action_proposals (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL REFERENCES investigation_runs(id),
+  action_name TEXT NOT NULL,
+  arguments_json TEXT NOT NULL,
+  expected_impact TEXT NOT NULL,
+  status TEXT NOT NULL,
+  result_json TEXT,
+  verification_status TEXT NOT NULL,
+  verification_tool_calls_json TEXT NOT NULL,
+  recovery_assessment_json TEXT,
+  agent_assessment_error TEXT
 );
 
 CREATE TABLE evaluations (
@@ -121,12 +193,12 @@ CREATE TABLE evaluations (
 
 INSERT INTO scenarios (id, name, description) VALUES (
   'checkout_db_pool_exhaustion',
-  'Checkout DB Pool Exhaustion',
-  'Checkout latency and HTTP 503s caused by postgres connection exhaustion after a checkout database pool configuration change.'
+  'Checkout Latency Spike',
+  'Checkout latency and intermittent HTTP 503s during payment submission.'
 );
 
 INSERT INTO incidents VALUES (
-  'inc_checkout_db_pool_001',
+  'inc_checkout_001',
   'checkout_db_pool_exhaustion',
   'Checkout latency and errors during payment submit',
   'SEV2',
@@ -134,7 +206,8 @@ INSERT INTO incidents VALUES (
   '2026-08-24T09:41:00Z',
   'checkout',
   '23 percent of checkout attempts exceeded 3 seconds; 4.8 percent returned HTTP 503.',
-  '["frontend /checkout POST latency increased","checkout p95 latency exceeded 3 seconds","payments saw elevated upstream cancellations","postgres connections reached max_connections"]'
+  'Checkout POST /checkout p95 latency below 500 ms.',
+  '["frontend /checkout POST latency increased","checkout p95 latency exceeded 3 seconds","some payment submissions were cancelled upstream"]'
 );
 
 INSERT INTO services VALUES
@@ -183,7 +256,7 @@ INSERT INTO logs VALUES
   ('log_checkout_recovered_after_rollback', 'checkout_db_pool_exhaustion', '2026-08-24T09:41:20Z', 'checkout', 'info', 'db pool max_open_connections restored', '{"pool":"orders","max_open_connections":20}');
 
 INSERT INTO changes VALUES
-  ('chg_checkout_pool_80', 'checkout_db_pool_exhaustion', '2026-08-24T09:11:00Z', 'checkout', 'config', 'Increase checkout orders database pool size', '{"config_key":"db.orders.max_open_connections","before":20,"after":80,"reason":"attempt to reduce queueing during flash-sale traffic","rolled_back_at":"2026-08-24T09:40:00Z"}'),
+  ('chg_checkout_pool_80', 'checkout_db_pool_exhaustion', '2026-08-24T09:11:00Z', 'checkout', 'config', 'Increase checkout orders database pool size', '{"config_key":"db.max_open_connections","before":20,"after":80,"reason":"attempt to reduce queueing during flash-sale traffic"}'),
   ('chg_frontend_banner', 'checkout_db_pool_exhaustion', '2026-08-24T09:07:00Z', 'frontend', 'content', 'Publish promotion banner', '{"route":"GET /","risk":"low"}');
 
 INSERT INTO expected_outcomes VALUES (
@@ -193,12 +266,12 @@ INSERT INTO expected_outcomes VALUES (
 
 INSERT INTO scenarios (id, name, description) VALUES (
   'payments_gateway_timeout',
-  'Payments Gateway Timeout',
-  'Checkout payment failures caused by a downstream payments gateway timeout configuration change.'
+  'Payment Submission Failures',
+  'Checkout payment authorization failures during card processing.'
 );
 
 INSERT INTO incidents VALUES (
-  'inc_payments_gateway_001',
+  'inc_payments_001',
   'payments_gateway_timeout',
   'Payment authorization failures during checkout',
   'SEV3',
@@ -206,7 +279,8 @@ INSERT INTO incidents VALUES (
   '2026-08-23T15:22:00Z',
   'checkout',
   'Some card authorizations failed for 18 minutes; retries usually succeeded.',
-  '["checkout reported payment_authorization_failed","payments HTTP 504 rate increased","postgres remained healthy"]'
+  'Payment authorization error rate below 1 percent.',
+  '["checkout reported payment_authorization_failed","payment submissions returned elevated 504 responses"]'
 );
 
 INSERT INTO services VALUES
@@ -256,20 +330,21 @@ INSERT INTO expected_outcomes VALUES (
 
 INSERT INTO scenarios (id, name, description) VALUES (
   'insufficient_frontend_evidence',
-  'Insufficient Frontend Evidence',
-  'Frontend product page errors with incomplete replay evidence; the reliable behavior is to avoid overclaiming.'
+  'Frontend Error Spike',
+  'Frontend product page errors with partial observability evidence.'
 );
 
 INSERT INTO incidents VALUES (
-  'inc_frontend_inconclusive_001',
+  'inc_frontend_001',
   'insufficient_frontend_evidence',
-  'Frontend product page error spike with partial evidence',
+  'Frontend product page error spike',
   'SEV3',
   '2026-08-22T11:30:00Z',
   '2026-08-22T11:43:00Z',
   'frontend',
   'Product detail pages intermittently returned HTTP 500 while caches warmed.',
-  '["frontend product route HTTP 500 rate increased","checkout and payments stayed healthy","available replay lacks conclusive change or dependency evidence"]'
+  'Product detail page HTTP 5xx rate below 1 error per minute.',
+  '["frontend product route HTTP 500 rate increased","checkout actions were not visibly impacted"]'
 );
 
 INSERT INTO services VALUES

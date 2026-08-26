@@ -49,37 +49,22 @@ export function Select({
   label,
   value,
   onChange,
+  disabled = false,
   children
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  disabled?: boolean;
   children: ReactNode;
 }) {
   return (
     <label className="select-field">
       <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)}>
+      <select value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
         {children}
       </select>
     </label>
-  );
-}
-
-export function MetricTile({
-  label,
-  value,
-  tone = "neutral"
-}: {
-  label: string;
-  value: string;
-  tone?: Tone;
-}) {
-  return (
-    <div className={`metric-tile metric-${tone}`}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
   );
 }
 
