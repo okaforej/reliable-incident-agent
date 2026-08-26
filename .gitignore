@@ -14,3 +14,4 @@ node_modules/
 dist/
 var/
 openapi_key.md
+PRESENTATION.md
