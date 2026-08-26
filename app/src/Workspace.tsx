@@ -100,11 +100,11 @@ export default function Workspace() {
                 <span className="eyebrow">Features</span>
                 <button className={view === "investigator" ? "active" : ""} type="button" onClick={() => chooseView("investigator")}>
                   <ShieldCheck size={17} />
-                  <span><strong>Incident Investigator</strong><small>Investigate and resolve incidents</small></span>
+                  <span><strong>Incident Investigator</strong><small>Investigate incidents</small></span>
                 </button>
                 <button className={view === "comparison" ? "active" : ""} type="button" onClick={() => chooseView("comparison")}>
                   <GitCompareArrows size={17} />
-                  <span><strong>Compare Agent Versions</strong><small>Evaluate behavioral reliability</small></span>
+                  <span><strong>Compare Agent Versions</strong><small>Compare reliability</small></span>
                 </button>
               </nav>
             ) : null}
@@ -331,7 +331,7 @@ function InvestigatorView({ scenarios, scenario, scenarioId, onScenario, provide
       <nav className="drawer-rail" aria-label="Investigator panels">
         <button className={drawer === "investigations" ? "active" : ""} type="button" aria-label="Investigation history" aria-pressed={drawer === "investigations"} onClick={() => setDrawer((current) => current === "investigations" ? null : "investigations")}><History size={17} /><span>History</span></button>
         <button className={drawer === "context" ? "active" : ""} type="button" aria-pressed={drawer === "context"} disabled={!scenario} onClick={() => setDrawer((current) => current === "context" ? null : "context")}><Info size={18} /><span>Context</span></button>
-        {drawer ? <button className="collapse-control" type="button" onClick={() => setDrawer(null)}><PanelLeftClose size={18} /><span>Collapse</span></button> : null}
+        {drawer ? <button className="collapse-control" type="button" onClick={() => setDrawer(null)}><PanelLeftClose size={18} /><span>Hide</span></button> : null}
       </nav>
 
       {drawer ? (
@@ -344,7 +344,7 @@ function InvestigatorView({ scenarios, scenario, scenarioId, onScenario, provide
 
       <section className="investigation-workspace">
         <div className="workspace-heading">
-          <div><span className="eyebrow">Investigation workspace</span><h2>{scenario?.name ?? "Incident workspace"}</h2></div>
+          <div><span className="eyebrow">Workspace</span><h2>{scenario?.name ?? "No incident selected"}</h2></div>
           {accepted ? <StreamBadge state={streamState} /> : run ? <Badge tone={run.trace.final_result.outcome === "abstain" ? "warning" : "success"}>{run.trace.final_result.outcome === "abstain" ? "Abstained" : "Completed"}</Badge> : null}
         </div>
         {!provider.ready ? <ProviderBanner provider={provider} operation="investigation" /> : null}
@@ -376,42 +376,42 @@ function InvestigationsDrawer({ scenarios, scenarioId, history, historyPending, 
 }) {
   const groups = groupInvestigations(history);
   return <>
-    <div className="drawer-heading"><span className="eyebrow">History</span><h2>Investigations</h2><p>Start or reopen a run.</p></div>
-    <label className="incident-finder"><span>Find an incident</span><select value={scenarioId} disabled={disabled} onChange={(event) => onScenario(event.target.value)}><option value="">Select an incident…</option>{scenarios.map((item) => <option value={item.id} key={item.id}>{item.name} · {item.severity}</option>)}</select></label>
+    <div className="drawer-heading"><span className="eyebrow">History</span><h2>Investigations</h2></div>
+    <label className="incident-finder"><span>Incident</span><select value={scenarioId} disabled={disabled} onChange={(event) => onScenario(event.target.value)}><option value="">Select an incident…</option>{scenarios.map((item) => <option value={item.id} key={item.id}>{item.name} · {item.severity}</option>)}</select></label>
     <div className="history-list" aria-busy={historyPending}>
-      {historyPending ? <p className="drawer-empty"><LoaderCircle className="spin" size={15} />Loading investigation history…</p> : null}
+      {historyPending ? <p className="drawer-empty"><LoaderCircle className="spin" size={15} />Loading…</p> : null}
       {historyError ? <div className="drawer-error"><AlertTriangle size={15} /><span>{historyError}</span></div> : null}
-      {!historyPending && !historyError && !history.length ? <p className="drawer-empty">No investigations yet. Select an incident above to begin.</p> : null}
-      {groups.map((group) => <section className="history-group" key={group.label}><h3>{group.label}</h3>{group.items.map((item) => <button className={selectedRunId === item.run_id ? "history-item active" : "history-item"} type="button" disabled={disabled} onClick={() => void onHistory(item)} key={item.run_id}><span><strong>{item.incident_title}</strong><small>{item.incident_id}</small></span><span><small>{historyStatus(item)}</small><time>{formatHistoryTime(item.created_at)}</time></span></button>)}</section>)}
+      {!historyPending && !historyError && !history.length ? <p className="drawer-empty">No runs yet.</p> : null}
+      {groups.map((group) => <section className="history-group" key={group.label}><h3>{group.label}</h3>{group.items.map((item) => <button className={selectedRunId === item.run_id ? "history-item active" : "history-item"} type="button" disabled={disabled} onClick={() => void onHistory(item)} key={item.run_id}><span><strong>{item.incident_title}</strong><small>{formatIncidentId(item.incident_id)}</small></span><span><small>{historyStatus(item)}</small><time>{formatHistoryTime(item.created_at)}</time></span></button>)}</section>)}
     </div>
   </>;
 }
 
 function IncidentContext({ scenario, verification }: { scenario?: ScenarioSummary; verification: ActionConfirmationResponse | null }) {
-  if (!scenario) return <div className="drawer-empty-state"><Info size={24} /><p>Select an incident to view its source context.</p></div>;
+  if (!scenario) return <div className="drawer-empty-state"><Info size={24} /><p>Select an incident.</p></div>;
   const operationalStatus = verification?.verification_status === "verified" ? "mitigated" : scenario.status;
   return <>
-    <div className="drawer-heading"><span className="eyebrow">Incident context</span><h2>{scenario.name}</h2><p>{scenario.incident_id}</p></div>
+    <div className="drawer-heading"><span className="eyebrow">Incident context</span><h2>{scenario.name}</h2><p>{formatIncidentId(scenario.incident_id)}</p></div>
     <div className="context-badges"><Badge tone={severityTone(scenario.severity)}>{scenario.severity}</Badge><Badge tone={operationalStatus === "mitigated" ? "success" : "danger"}><StatusDot tone={operationalStatus === "mitigated" ? "success" : "danger"} />{operationalStatus}</Badge></div>
-    <dl className="context-facts"><div><dt>Affected service</dt><dd>{scenario.affected_service}</dd></div><div><dt>Target SLI</dt><dd>{scenario.target_sli}</dd></div><div><dt>Started</dt><dd>{formatTimestamp(scenario.started_at)}</dd></div><div><dt>Customer impact</dt><dd>{scenario.customer_impact}</dd></div></dl>
-    {scenario.symptoms.length ? <div className="context-symptoms"><span>Alert symptoms</span>{scenario.symptoms.map((symptom) => <p key={symptom}><Activity size={13} />{symptom}</p>)}</div> : null}
-    <div className="replay-label"><CircleDot size={14} /><span>Replay environment · deterministic telemetry</span></div>
+    <dl className="context-facts"><div><dt>Service</dt><dd>{scenario.affected_service}</dd></div><div><dt>Target SLI</dt><dd>{scenario.target_sli}</dd></div><div><dt>Started</dt><dd>{formatTimestamp(scenario.started_at)}</dd></div><div><dt>Impact</dt><dd>{scenario.customer_impact}</dd></div></dl>
+    {scenario.symptoms.length ? <div className="context-symptoms"><span>Signals</span>{scenario.symptoms.map((symptom) => <p key={symptom}><Activity size={13} />{symptom}</p>)}</div> : null}
+    <div className="replay-label"><CircleDot size={14} /><span>Deterministic replay</span></div>
   </>;
 }
 
 function EmptyWorkspace({ onOpen }: { onOpen: () => void }) {
-  return <Card className="empty-workspace"><div className="empty-icon"><ShieldCheck size={28} /></div><span className="eyebrow">Incident Investigator</span><h3>Select an incident</h3><p>Review its context, then start the agent.</p><Button onClick={onOpen}><History size={15} />Find incident</Button></Card>;
+  return <Card className="empty-workspace"><div className="empty-icon"><ShieldCheck size={24} /></div><span className="eyebrow">Incident Investigator</span><h3>Select an incident</h3><p>Review context, then investigate.</p><Button onClick={onOpen}><History size={15} />Find incident</Button></Card>;
 }
 
 function SelectedIncident({ scenario, provider, busy, onStart }: { scenario: ScenarioSummary; provider: ProviderAvailability; busy: boolean; onStart: () => Promise<void> }) {
-  return <Card className="selected-incident"><div className="selected-incident-main"><div><span className="eyebrow">Ready to investigate · {scenario.incident_id}</span><h3>{scenario.name}</h3><p>{scenario.customer_impact}</p></div><div className="selected-badges"><Badge tone={severityTone(scenario.severity)}>{scenario.severity}</Badge><Badge tone="neutral">{scenario.affected_service}</Badge></div></div><div className="start-boundary"><div><strong>Autonomous investigation</strong><p>A real LLM will form hypotheses and choose observability tools against deterministic telemetry. No model work has started yet.</p></div><Button onClick={() => void onStart()} disabled={!provider.ready || busy}><Play size={16} />{busy ? "Starting investigation" : "Start investigation"}</Button></div></Card>;
+  return <Card className="selected-incident"><div className="selected-incident-main"><div><span className="eyebrow">{formatIncidentId(scenario.incident_id)} · Ready</span><h3>Autonomous investigation</h3></div><div className="selected-badges"><Badge tone={severityTone(scenario.severity)}>{scenario.severity}</Badge><Badge tone="neutral">{scenario.affected_service}</Badge></div></div><div className="start-boundary"><div><strong>Real LLM · deterministic telemetry</strong><p>The agent chooses hypotheses, tools, and evidence.</p></div><Button onClick={() => void onStart()} disabled={!provider.ready || busy}><Play size={16} />{busy ? "Starting…" : "Start investigation"}</Button></div></Card>;
 }
 
 function LiveTimeline({ accepted, events, streamState, failure, onRetry }: { accepted: InvestigationAccepted; events: InvestigationEvent[]; streamState: StreamState; failure: string | null; onRetry: () => void }) {
   const visibleEvents = visibleInvestigationEvents(events);
   const hasFailureEvent = events.some((event) => event.type === "investigation.failed");
   const connectionNeedsAttention = streamState === "reconnecting" || (streamState === "closed" && !failure);
-  return <Card><CardHeader eyebrow={`Run ${shortId(accepted.run_id)}`} title="Live investigation timeline" action={<StreamBadge state={streamState} />}>Operational milestones appear as the agent works. Raw model reasoning is never displayed.</CardHeader>{connectionNeedsAttention ? <div className="reconnect-banner"><WifiOff size={15} /><span>Progress connection interrupted. The same run is preserved and no investigation was restarted.</span><Button variant="secondary" onClick={onRetry}>Reconnect</Button></div> : null}<div className="timeline live-timeline" aria-live="polite">{visibleEvents.length ? visibleEvents.map((event, index) => <ProgressEventEntry event={event} current={index === visibleEvents.length - 1} key={event.id} />) : <TimelineEntry icon={<LoaderCircle className="spin" size={16} />} label="Run accepted" current><p>The investigation is queued. Waiting for the first durable progress event.</p></TimelineEntry>}{failure && !hasFailureEvent ? <TimelineEntry icon={<XCircle size={16} />} label="Investigation failed" current><h3>Investigation could not complete</h3><p>{failure}</p></TimelineEntry> : null}</div></Card>;
+  return <Card><CardHeader eyebrow={`Run ${shortId(accepted.run_id)}`} title="Investigation timeline" action={<StreamBadge state={streamState} />}>Durable progress · reasoning stays private.</CardHeader>{connectionNeedsAttention ? <div className="reconnect-banner"><WifiOff size={15} /><span>Progress disconnected; this run is preserved.</span><Button variant="secondary" onClick={onRetry}>Reconnect</Button></div> : null}<div className="timeline live-timeline" aria-live="polite">{visibleEvents.length ? visibleEvents.map((event, index) => <ProgressEventEntry event={event} current={index === visibleEvents.length - 1} key={event.id} />) : <TimelineEntry icon={<LoaderCircle className="spin" size={16} />} label="Run accepted" current><p>Waiting for the first progress event.</p></TimelineEntry>}{failure && !hasFailureEvent ? <TimelineEntry icon={<XCircle size={16} />} label="Investigation failed" current><h3>Investigation failed</h3><p>{failure}</p></TimelineEntry> : null}</div></Card>;
 }
 
 function ProgressEventEntry({ event, current }: { event: InvestigationEvent; current: boolean }) {
@@ -420,14 +420,14 @@ function ProgressEventEntry({ event, current }: { event: InvestigationEvent; cur
   if (event.type === "tool.started") return <TimelineEntry icon={<LoaderCircle className="spin" size={16} />} label={`${time} · ${humanizeToolName(event.payload.tool_name)}`} current><div className="active-step"><span className="pulse-dot" /><div><h3>{event.summary}</h3><p>{event.payload.purpose}</p></div></div></TimelineEntry>;
   if (event.type === "hypotheses.updated") return <TimelineEntry icon={<CircleDot size={16} />} label={`${time} · Hypotheses updated`} current={current}><p className="event-summary">{event.summary}</p><HypothesisList hypotheses={event.payload.hypotheses} /></TimelineEntry>;
   if (event.type === "investigation.failed") return <TimelineEntry icon={<XCircle size={16} />} label={`${time} · Investigation failed`} current><h3>{event.summary}</h3><p>{event.payload.error}</p></TimelineEntry>;
-  if (event.type === "investigation.completed") return <TimelineEntry icon={<CheckCircle2 size={16} />} label={`${time} · Investigation complete`} current><h3>{event.summary}</h3><p>{event.payload.tool_call_count} observability tool calls completed. Retrieving the canonical result.</p></TimelineEntry>;
-  return <TimelineEntry icon={<Activity size={16} />} label={`${time} · Investigation started`} current={current}><h3>{event.summary}</h3><p>The investigator is testing evidence-backed hypotheses for this incident.</p></TimelineEntry>;
+  if (event.type === "investigation.completed") return <TimelineEntry icon={<CheckCircle2 size={16} />} label={`${time} · Complete`} current><h3>{event.summary}</h3><p>{event.payload.tool_call_count} tools complete. Loading result.</p></TimelineEntry>;
+  return <TimelineEntry icon={<Activity size={16} />} label={`${time} · Started`} current={current}><h3>{event.summary}</h3><p>Testing evidence-backed hypotheses.</p></TimelineEntry>;
 }
 
 function StreamBadge({ state }: { state: StreamState }) {
   if (state === "live") return <Badge tone="success"><Wifi size={13} />Live</Badge>;
   if (state === "reconnecting") return <Badge tone="warning"><WifiOff size={13} />Reconnecting</Badge>;
-  if (state === "closed") return <Badge tone="neutral">Stream closed</Badge>;
+  if (state === "closed") return <Badge tone="neutral">Closed</Badge>;
   return <Badge tone="info"><LoaderCircle className="spin" size={13} />Connecting</Badge>;
 }
 
@@ -441,14 +441,15 @@ function CompletedWorkspace({ run, chat, proposal, verification, actionBusy, onC
 }) {
   const result = run.trace.final_result;
   const supportingCalls = run.trace.tool_calls.filter((call) => call.evidence_ids.some((id) => result.evidence_ids.includes(id)));
+  const outcomeText = result.root_cause ?? (result.outcome === "abstain" ? "Evidence is insufficient for a defensible root cause." : run.trace.final_root_cause);
   return <div className="completed-stack">
-    <Card className={`outcome-card outcome-${result.outcome}`}><div className="outcome-heading"><div><span className="eyebrow">{result.outcome === "abstain" ? "Investigation abstained" : result.outcome === "error" ? "Investigation failed" : "Root cause analysis"}</span><h3>{result.root_cause ?? (result.outcome === "abstain" ? "The available evidence is insufficient for a defensible root cause." : run.trace.final_root_cause)}</h3></div><Badge tone={result.outcome === "error" ? "danger" : result.outcome === "abstain" ? "warning" : "success"}>{result.confidence} confidence</Badge></div>{result.mitigation ? <div className="outcome-mitigation"><strong>Recommended mitigation</strong><p>{result.mitigation}</p></div> : null}{result.missing_evidence.length ? <div className="missing-evidence"><strong>Missing evidence</strong><ul>{result.missing_evidence.map((item) => <li key={item}>{item}</li>)}</ul></div> : null}</Card>
-    <Card className="supporting-evidence"><CardHeader eyebrow="Grounded conclusion" title="Supporting evidence">Only evidence retrieved during this run supports the conclusion.</CardHeader><div className="supporting-evidence-list">{supportingCalls.length ? supportingCalls.map((call) => <div key={`support-${call.sequence}-${call.tool_name}`}><TerminalSquare size={16} /><span><strong>{call.purpose}</strong><small>{humanizeToolName(call.tool_name)}</small><EvidenceIds ids={call.evidence_ids.filter((id) => result.evidence_ids.includes(id))} /></span></div>) : <div className="no-supporting-evidence"><AlertTriangle size={16} /><p>No retrieved tool call matched the final evidence references.</p></div>}</div></Card>
-    {proposal && !verification ? <Card className="action-card"><CardHeader eyebrow="Human confirmation required" title="Proposed mitigation">The agent cannot change replay state without confirmation.</CardHeader><div className="action-card-body"><ActionConfirmation proposal={proposal} busy={actionBusy} onConfirm={onConfirm} /></div></Card> : null}
-    {verification ? <Card className="verification-card"><CardHeader eyebrow="Confirmed action" title="Post-action verification">Deterministic telemetry owns the recovery verdict.</CardHeader><div className="verification-card-body"><VerificationDetails verification={verification} /></div></Card> : null}
-    {chat.length ? <Card className="conversation-card"><CardHeader eyebrow="Same run context" title="Follow-up conversation">Answers remain grounded in evidence retrieved for this investigation.</CardHeader><div className="conversation-list">{chat.map((exchange, index) => <ChatExchangeView exchange={exchange} index={index} key={`${exchange.response.run_id}-${index}`} />)}</div></Card> : null}
-    <details className="disclosure-card"><summary><span><strong>Investigation trail</strong><small>{run.trace.tool_calls.length} observability tool calls · {run.trace.agent_config_id} policy</small></span><ChevronDown size={17} /></summary><div className="timeline">{run.trace.tool_calls.map((call) => <ToolEntry call={call} key={`${call.sequence}-${call.tool_name}`} />)}{result.hypothesis_summary.length ? <TimelineEntry icon={<CircleDot size={16} />} label="Final hypothesis state"><HypothesisList hypotheses={result.hypothesis_summary} /></TimelineEntry> : null}{chat.flatMap((exchange, index) => exchange.response.tool_calls.map((call) => <ToolEntry call={call} key={`chat-${index}-${call.sequence}-${call.tool_name}`} />))}</div></details>
-    {run.evaluation ? <details className="disclosure-card reliability-disclosure"><summary><span><strong>Behavioral SLO</strong><small>Grounding · Investigation sufficiency · Tool efficiency</small></span><span className={run.evaluation.behavioral_slo_pass ? "passfail pass" : "passfail fail"}>{run.evaluation.behavioral_slo_pass ? "PASS" : "FAIL"}</span><ChevronDown size={17} /></summary><div className="disclosure-body"><PrimarySloSummary evaluation={run.evaluation} /></div></details> : null}
+    <Card className={`outcome-card outcome-${result.outcome}`}><div className="outcome-heading"><div><span className="eyebrow">{result.outcome === "abstain" ? "Abstained" : result.outcome === "error" ? "Failed" : "Root cause"}</span><CompactHeadingCopy text={outcomeText} /></div><Badge tone={result.outcome === "error" ? "danger" : result.outcome === "abstain" ? "warning" : "success"}>{result.confidence} confidence</Badge></div>{result.mitigation ? <div className="outcome-mitigation"><strong>Mitigation</strong><p>{result.mitigation}</p></div> : null}{result.missing_evidence.length ? <div className="missing-evidence"><strong>Missing evidence</strong><ul>{result.missing_evidence.map((item) => <li key={item}>{item}</li>)}</ul></div> : null}</Card>
+    <Card className="supporting-evidence"><CardHeader title="Supporting evidence" /><div className="supporting-evidence-list">{supportingCalls.length ? supportingCalls.map((call) => <div key={`support-${call.sequence}-${call.tool_name}`}><TerminalSquare size={16} /><span><strong title={call.purpose}>{call.purpose}</strong><small>{humanizeToolName(call.tool_name)}</small><EvidenceIds ids={call.evidence_ids.filter((id) => result.evidence_ids.includes(id))} /></span></div>) : <div className="no-supporting-evidence"><AlertTriangle size={16} /><p>No retrieved call matched the final evidence.</p></div>}</div></Card>
+    {proposal && !verification ? <Card className="action-card"><CardHeader eyebrow="Confirmation required" title="Proposed rollback" /><div className="action-card-body"><ActionConfirmation proposal={proposal} busy={actionBusy} onConfirm={onConfirm} /></div></Card> : null}
+    {verification ? <Card className="verification-card"><CardHeader eyebrow="Confirmed action" title="Recovery verification" /><div className="verification-card-body"><VerificationDetails verification={verification} /></div></Card> : null}
+    {chat.length ? <Card className="conversation-card"><CardHeader eyebrow="Same run" title="Follow-ups" /><div className="conversation-list">{chat.map((exchange, index) => <ChatExchangeView exchange={exchange} index={index} key={`${exchange.response.run_id}-${index}`} />)}</div></Card> : null}
+    <details className="disclosure-card"><summary><span><strong>Investigation trail</strong><small>{run.trace.tool_calls.length} tools · {run.trace.agent_config_id} policy</small></span><ChevronDown size={17} /></summary><div className="timeline">{run.trace.tool_calls.map((call) => <ToolEntry call={call} key={`${call.sequence}-${call.tool_name}`} />)}{result.hypothesis_summary.length ? <TimelineEntry icon={<CircleDot size={16} />} label="Final hypotheses"><HypothesisList hypotheses={result.hypothesis_summary} /></TimelineEntry> : null}{chat.flatMap((exchange, index) => exchange.response.tool_calls.map((call) => <ToolEntry call={call} key={`chat-${index}-${call.sequence}-${call.tool_name}`} />))}</div></details>
+    {run.evaluation ? <details className="disclosure-card reliability-disclosure"><summary><span><strong>Behavioral SLO</strong><small>Grounding · Sufficiency · Efficiency</small></span><span className={run.evaluation.behavioral_slo_pass ? "passfail pass" : "passfail fail"}>{run.evaluation.behavioral_slo_pass ? "PASS" : "FAIL"}</span><ChevronDown size={17} /></summary><div className="disclosure-body"><PrimarySloSummary evaluation={run.evaluation} /></div></details> : null}
   </div>;
 }
 
@@ -464,7 +465,7 @@ function ToolCallDetails({ call, current = false }: { call: ToolCall; current?: 
   const [expanded, setExpanded] = useState(current || call.status === "error");
   const wasCurrent = useRef(current);
   useEffect(() => { if (current) setExpanded(true); else if (wasCurrent.current) setExpanded(false); wasCurrent.current = current; }, [current]);
-  return <div className="tool-call"><div className="tool-summary-row"><div><p className="tool-purpose">{call.purpose || "Tool purpose was not supplied."}</p><div className="tool-meta"><Badge tone={call.status === "ok" ? "success" : "danger"}>{call.status}</Badge><span>{call.duration_ms} ms</span><span>{call.evidence_ids.length} evidence {call.evidence_ids.length === 1 ? "item" : "items"}</span></div></div><button className="tool-expand" type="button" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}><span>{expanded ? "Hide details" : "View details"}</span><ChevronDown size={15} /></button></div>{expanded ? <div className="tool-detail-panel"><div className="json-pair"><JsonPayload label="Arguments" value={call.arguments} /><JsonPayload label="Result" value={call.result} /></div><div className="tool-evidence"><span>Evidence returned</span>{call.evidence_ids.length ? <EvidenceIds ids={call.evidence_ids} /> : <p className="muted-copy">This tool call returned no evidence identifiers.</p>}</div></div> : null}</div>;
+  return <div className="tool-call"><div className="tool-summary-row"><div><p className={`tool-purpose${expanded ? " expanded" : ""}`} title={call.purpose}>{call.purpose || "Purpose unavailable."}</p><div className="tool-meta"><Badge tone={call.status === "ok" ? "success" : "danger"}>{call.status}</Badge><span>{call.duration_ms} ms</span><span>{call.evidence_ids.length} evidence</span></div></div><button className="tool-expand" type="button" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}><span>{expanded ? "Hide" : "Details"}</span><ChevronDown size={15} /></button></div>{expanded ? <div className="tool-detail-panel"><div className="json-pair"><JsonPayload label="Arguments" value={call.arguments} /><JsonPayload label="Result" value={call.result} /></div><div className="tool-evidence"><span>Evidence</span>{call.evidence_ids.length ? <EvidenceIds ids={call.evidence_ids} /> : <p className="muted-copy">No evidence IDs.</p>}</div></div> : null}</div>;
 }
 
 function HypothesisList({ hypotheses }: { hypotheses: InvestigationResponse["trace"]["final_result"]["hypothesis_summary"] }) {
@@ -472,13 +473,13 @@ function HypothesisList({ hypotheses }: { hypotheses: InvestigationResponse["tra
 }
 
 function ChatExchangeView({ exchange, index }: { exchange: ChatExchange; index: number }) {
-  return <section className="chat-exchange"><span className="eyebrow">Follow-up {index + 1}</span><div className="chat-bubble user"><strong>You</strong><p>{exchange.question}</p></div><div className="chat-bubble agent"><strong>Investigator</strong><p>{exchange.response.message}</p><EvidenceIds ids={exchange.response.evidence_ids} /></div></section>;
+  return <section className="chat-exchange"><span className="eyebrow">Follow-up {index + 1}</span><div className="chat-bubble user"><strong>You</strong><p>{exchange.question}</p></div><div className="chat-bubble agent"><strong>Investigator</strong><CompactCopy text={exchange.response.message} label="Full answer" /><EvidenceIds ids={exchange.response.evidence_ids} /></div></section>;
 }
 
 function IncidentComposer({ runReady, disabled, onSend }: { runReady: boolean; disabled: boolean; onSend: (message: string) => Promise<void> }) {
   const [message, setMessage] = useState("");
   function submit(event: FormEvent) { event.preventDefault(); const value = message.trim(); if (!value || !runReady || disabled) return; setMessage(""); void onSend(value); }
-  return <form className="workspace-composer" onSubmit={submit}><MessageSquare size={18} /><input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={runReady ? "Ask about this investigation…" : "Follow-up is available after the investigation completes"} disabled={!runReady || disabled} aria-label="Ask about this investigation" /><Button type="submit" disabled={!runReady || disabled || !message.trim()}><Send size={15} />Send</Button></form>;
+  return <form className="workspace-composer" onSubmit={submit}><MessageSquare size={17} /><input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={runReady ? "Ask a follow-up…" : "Available after completion"} disabled={!runReady || disabled} aria-label="Ask about this investigation" /><Button type="submit" disabled={!runReady || disabled || !message.trim()}><Send size={14} />Send</Button></form>;
 }
 
 function ActionConfirmation({ proposal, busy, onConfirm }: { proposal: ActionProposal; busy: boolean; onConfirm: (proposal: ActionProposal) => Promise<void> }) {
@@ -490,7 +491,7 @@ function ActionConfirmation({ proposal, busy, onConfirm }: { proposal: ActionPro
 
 function VerificationDetails({ verification }: { verification: ActionConfirmationResponse }) {
   const assessment = verification.recovery_assessment;
-  return <div className="verification-details"><div className="verification-heading"><div><h3>Recovery verification</h3><p>Application code owns the verdict from returned telemetry. The investigator separately interprets that evidence.</p></div><Badge tone={verification.verification_status === "verified" ? "success" : "danger"}>{verification.verification_status}</Badge></div><div className="verification-results"><JsonPayload label="Confirmed replay state" value={verification.result} />{verification.verification_tool_calls.length ? verification.verification_tool_calls.map((call) => <section className="verification-call" key={`verify-${call.sequence}-${call.tool_name}`}><strong>{call.sequence}. {humanizeToolName(call.tool_name)}</strong><ToolCallDetails call={call} /></section>) : <p className="muted-copy">No post-action verification tools were returned.</p>}{assessment ? <section className="agent-assessment"><div><span>Investigator assessment</span><Badge tone={assessment.conclusion === "recovered" ? "success" : assessment.conclusion === "uncertain" ? "warning" : "danger"}>{assessment.conclusion.replace("_", " ")}</Badge></div><p>{assessment.summary}</p><EvidenceIds ids={assessment.evidence_ids} />{assessment.remaining_risks.length ? <ul>{assessment.remaining_risks.map((risk) => <li key={risk}>{risk}</li>)}</ul> : null}</section> : null}{verification.agent_assessment_error ? <div className="assessment-error"><AlertTriangle size={15} /><span>The action completed and telemetry was evaluated, but the investigator assessment failed: {verification.agent_assessment_error}</span></div> : null}</div></div>;
+  return <div className="verification-details"><div className="verification-heading"><div><h3>Recovery verification</h3><p>Deterministic verdict; agent interpretation below.</p></div><Badge tone={verification.verification_status === "verified" ? "success" : "danger"}>{verification.verification_status}</Badge></div><div className="verification-results"><JsonPayload label="Replay state" value={verification.result} />{verification.verification_tool_calls.length ? verification.verification_tool_calls.map((call) => <section className="verification-call" key={`verify-${call.sequence}-${call.tool_name}`}><strong>{call.sequence}. {humanizeToolName(call.tool_name)}</strong><ToolCallDetails call={call} /></section>) : <p className="muted-copy">No verification tools returned.</p>}{assessment ? <section className="agent-assessment"><div><span>Agent assessment</span><Badge tone={assessment.conclusion === "recovered" ? "success" : assessment.conclusion === "uncertain" ? "warning" : "danger"}>{assessment.conclusion.replace("_", " ")}</Badge></div><p>{assessment.summary}</p><EvidenceIds ids={assessment.evidence_ids} />{assessment.remaining_risks.length ? <ul>{assessment.remaining_risks.map((risk) => <li key={risk}>{risk}</li>)}</ul> : null}</section> : null}{verification.agent_assessment_error ? <div className="assessment-error"><AlertTriangle size={15} /><span>Action verified; agent assessment failed: {verification.agent_assessment_error}</span></div> : null}</div></div>;
 }
 
 function JsonPayload({ label, value }: { label: string; value: Record<string, unknown> }) {
@@ -571,9 +572,9 @@ function ComparisonView({ scenarios, scenarioId, onScenario, provider }: { scena
       <section className="comparison-view">
         <section className="comparison-setup">
           <div className="comparison-intro">
-            <span className="eyebrow">Agent evaluation</span>
-            <h2>Compare agent investigations</h2>
-            <p>Same incident and tools. Different configuration.</p>
+            <span className="eyebrow">Evaluation</span>
+            <h2>Compare agents</h2>
+            <p>Same incident and tools; different prompt.</p>
           </div>
           <div className="comparison-controls">
             <Select label="Incident" value={scenarioId} disabled={busy} onChange={changeScenario}>
@@ -586,7 +587,7 @@ function ComparisonView({ scenarios, scenarioId, onScenario, provider }: { scena
           </div>
           {selectedScenario ? (
             <div className="comparison-incident-strip">
-              <span><strong>{selectedScenario.name}</strong><small>{selectedScenario.incident_id}</small></span>
+              <span><strong>{selectedScenario.name}</strong><small>{formatIncidentId(selectedScenario.incident_id)}</small></span>
               <Badge tone={severityTone(selectedScenario.severity)}>{selectedScenario.severity}</Badge>
               <Badge tone="neutral">{selectedScenario.affected_service}</Badge>
               <span className="comparison-sli"><small>Target SLI</small><strong>{selectedScenario.target_sli}</strong></span>
@@ -611,12 +612,12 @@ function ComparisonHistoryDrawer({ items, pending, error, selectedId, disabled, 
 }) {
   const groups = groupComparisons(items);
   return <>
-    <div className="drawer-heading"><span className="eyebrow">History</span><h2>Agent comparisons</h2></div>
+    <div className="drawer-heading"><span className="eyebrow">History</span><h2>Comparisons</h2></div>
     <div className="history-list comparison-history-list" aria-busy={pending}>
       {pending ? <p className="drawer-empty"><LoaderCircle className="spin" size={15} />Loading…</p> : null}
       {error ? <div className="drawer-error"><AlertTriangle size={15} /><span>{error}</span></div> : null}
       {!pending && !error && !items.length ? <p className="drawer-empty">No comparisons yet.</p> : null}
-      {groups.map((group) => <section className="history-group" key={group.label}><h3>{group.label}</h3>{group.items.map((item) => <button className={selectedId === item.comparison_id ? "history-item active" : "history-item"} type="button" disabled={disabled} onClick={() => void onOpen(item)} key={item.comparison_id}><span><strong>{item.incident_title}</strong><small>Baseline ↔ Candidate</small></span><span><small>Compared</small><time>{formatHistoryTime(item.created_at)}</time></span></button>)}</section>)}
+      {groups.map((group) => <section className="history-group" key={group.label}><h3>{group.label}</h3>{group.items.map((item) => <button className={selectedId === item.comparison_id ? "history-item active" : "history-item"} type="button" disabled={disabled} onClick={() => void onOpen(item)} key={item.comparison_id}><span><strong>{item.incident_title}</strong><small>Baseline ↔ Candidate</small></span><span><time>{formatHistoryTime(item.created_at)}</time></span></button>)}</section>)}
     </div>
   </>;
 }
@@ -631,10 +632,10 @@ export function ComparisonRunningState({ scenario, elapsedSeconds }: { scenario?
       </div>
       <div className="indeterminate-progress"><span /></div>
       <div className="running-agent-lanes">
-        <div><span className="lane-dot" /><strong>Baseline</strong><small>Waiting for completed run</small></div>
-        <div><span className="lane-dot" /><strong>Candidate</strong><small>Waiting for completed run</small></div>
+        <div><span className="lane-dot" /><strong>Baseline</strong><small>Awaiting result</small></div>
+        <div><span className="lane-dot" /><strong>Candidate</strong><small>Awaiting result</small></div>
       </div>
-      <p>Results appear together when both independent investigations finish.</p>
+      <p>Both results load together.</p>
     </Card>
   );
 }
@@ -643,18 +644,18 @@ function ComparisonResults({ comparison }: { comparison: ComparisonResponse }) {
   return (
     <div className="comparison-stack">
       <div className="comparison-result-heading">
-        <div><span className="eyebrow">Completed</span><h2>Comparison results</h2></div>
+        <div><span className="eyebrow">Completed</span><h2>Results</h2></div>
         <Badge tone="success">Run {shortId(comparison.comparison_id)}</Badge>
       </div>
       <Card className="comparison-score-card">
-        <CardHeader eyebrow="Output" title="RCA correctness" action={<Badge tone="neutral">Separate measure</Badge>}>Final-answer accuracy.</CardHeader>
+        <CardHeader title="RCA correctness" action={<Badge tone="neutral">Output metric</Badge>} />
         <div className="output-grid"><RunOutcome label="Baseline" run={comparison.baseline} /><RunOutcome label="Candidate" run={comparison.candidate} /></div>
       </Card>
       <Card className="comparison-sli-card">
-        <CardHeader eyebrow="Behavior" title="Behavioral SLO" action={<Gauge size={18} />}>Grounding, Sufficiency, and Efficiency.</CardHeader>
+        <CardHeader title="Behavioral SLO" action={<Gauge size={17} />}>Grounding · Sufficiency · Efficiency</CardHeader>
         <SliTable baseline={comparison.baseline.evaluation} candidate={comparison.candidate.evaluation} />
       </Card>
-      <div className="comparison-section-heading"><div><span className="eyebrow">Evidence path</span><h2>Tool trajectories</h2></div><Badge tone="info">Same boundary</Badge></div>
+      <div className="comparison-section-heading"><div><span className="eyebrow">Evidence path</span><h2>Tool paths</h2></div><Badge tone="info">Same tools</Badge></div>
       <div className="trajectory-grid"><Trajectory label="Baseline" run={comparison.baseline} /><Trajectory label="Candidate" run={comparison.candidate} /></div>
     </div>
   );
@@ -665,9 +666,9 @@ function ComparisonEmptyState({ scenario }: { scenario?: ScenarioSummary }) {
     <Card className="comparison-empty-state">
       <div className="comparison-empty-copy">
         <div className="comparison-empty-icon"><GitCompareArrows size={24} /></div>
-        <span className="eyebrow">Controlled comparison</span>
-        <h3>{scenario ? `Ready: ${scenario.name}` : "Select an incident"}</h3>
-        <p>Compare RCA, Behavioral SLO, and tool path.</p>
+        <span className="eyebrow">Controlled evaluation</span>
+        <h3>{scenario ? "Ready to compare" : "Select an incident"}</h3>
+        <p>RCA · behavior · tool path</p>
       </div>
       <div className="experiment-frame">
         <article className="experiment-agent baseline-agent"><span>Baseline</span><strong>Reference</strong></article>
@@ -684,8 +685,8 @@ function ComparisonEmptyState({ scenario }: { scenario?: ScenarioSummary }) {
 }
 
 function PrimarySloSummary({ evaluation }: { evaluation: BehavioralEvaluation }) {
-  const rows: Array<[string, boolean]> = [["Grounding", evaluation.grounded], ["Investigation sufficiency", evaluation.investigation_sufficient], ["Tool efficiency", evaluation.tool_efficient]];
-  return <div className="primary-slo-summary"><div className="primary-slo-heading"><div><strong>Behavioral SLO</strong><p>RCA correctness remains a separate output measure.</p></div><PassFail value={evaluation.behavioral_slo_pass} /></div><div className="primary-slo-rows">{rows.map(([label, value]) => <div key={label}><span>{label}</span><PassFail value={value} /></div>)}</div></div>;
+  const rows: Array<[string, boolean]> = [["Grounding", evaluation.grounded], ["Sufficiency", evaluation.investigation_sufficient], ["Efficiency", evaluation.tool_efficient]];
+  return <div className="primary-slo-summary"><div className="primary-slo-heading"><div><strong>Behavioral SLO</strong><p>RCA is scored separately.</p></div><PassFail value={evaluation.behavioral_slo_pass} /></div><div className="primary-slo-rows">{rows.map(([label, value]) => <div key={label}><span>{label}</span><PassFail value={value} /></div>)}</div></div>;
 }
 
 function RunOutcome({ label, run }: { label: string; run: InvestigationResponse }) {
@@ -693,25 +694,37 @@ function RunOutcome({ label, run }: { label: string; run: InvestigationResponse 
   const correctness = run.evaluation?.rca_correct;
   return (
     <article className={`run-outcome run-outcome-${label.toLowerCase()}`}>
-      <div className="run-outcome-heading"><span><small>{label} configuration</small><strong>{run.trace.agent_config_id}</strong></span><Badge tone={correctness ? "success" : correctness === false ? "danger" : "neutral"}>RCA {correctness ? "PASS" : correctness === false ? "FAIL" : "NOT SCORED"}</Badge></div>
-      <div className="run-outcome-answer"><span>Final outcome</span><p>{result.root_cause ?? (result.outcome === "abstain" ? "The agent abstained because the available evidence was insufficient." : "No valid result was returned.")}</p></div>
-      <div className="run-outcome-meta"><span><small>Model</small><strong>{run.trace.model}</strong></span><span><small>Prompt</small><strong>{run.trace.prompt_version}</strong></span><span><small>Tools</small><strong>{run.trace.tool_calls.length} calls</strong></span></div>
+      <div className="run-outcome-heading"><span><strong>{label}</strong><small>{run.trace.agent_config_id} policy</small></span><Badge tone={correctness ? "success" : correctness === false ? "danger" : "neutral"}>RCA {correctness ? "PASS" : correctness === false ? "FAIL" : "N/A"}</Badge></div>
+      <div className="run-outcome-answer"><span>Outcome</span><CompactCopy text={result.root_cause ?? (result.outcome === "abstain" ? "The agent abstained because evidence was insufficient." : "No valid result was returned.")} label="Full RCA" /></div>
+      <div className="run-outcome-meta"><span><small>Model</small><strong>{run.trace.model}</strong></span><span><small>Prompt</small><strong>{run.trace.prompt_version}</strong></span><span><small>Calls</small><strong>{run.trace.tool_calls.length}</strong></span></div>
     </article>
   );
 }
 
+function CompactCopy({ text, label }: { text: string; label: string }) {
+  const normalized = text.trim().replace(/\s+/g, " ");
+  const preview = compactText(normalized, 180);
+  return <><p>{preview}</p>{preview !== normalized ? <details className="inline-copy-disclosure"><summary>{label}</summary><p>{normalized}</p></details> : null}</>;
+}
+
+function CompactHeadingCopy({ text }: { text: string }) {
+  const normalized = text.trim().replace(/\s+/g, " ");
+  const preview = compactText(normalized, 230);
+  return <><h3>{preview}</h3>{preview !== normalized ? <details className="outcome-copy-disclosure"><summary>Full analysis</summary><p>{normalized}</p></details> : null}</>;
+}
+
 function SliTable({ baseline, candidate }: { baseline: BehavioralEvaluation | null; candidate: BehavioralEvaluation | null }) {
   type BehavioralSliKey = "grounded" | "investigation_sufficient" | "tool_efficient" | "behavioral_slo_pass";
-  const rows: Array<[string, BehavioralSliKey]> = [["Grounding", "grounded"], ["Investigation sufficiency", "investigation_sufficient"], ["Tool efficiency", "tool_efficient"], ["Behavioral SLO", "behavioral_slo_pass"]];
+  const rows: Array<[string, BehavioralSliKey]> = [["Grounding", "grounded"], ["Sufficiency", "investigation_sufficient"], ["Efficiency", "tool_efficient"], ["Behavioral SLO", "behavioral_slo_pass"]];
   return <div className="sli-table"><div className="sli-row heading"><span>Metric</span><span>Baseline</span><span>Candidate</span></div>{rows.map(([label, key]) => <div className={`sli-row${key === "behavioral_slo_pass" ? " composite" : ""}`} key={key}><span>{label}</span><PassFail value={baseline?.[key]} /><PassFail value={candidate?.[key]} /></div>)}</div>;
 }
 
 function Trajectory({ label, run }: { label: string; run: InvestigationResponse }) {
-  return <Card className={`trajectory-card trajectory-${label.toLowerCase()}`}><CardHeader eyebrow={run.trace.agent_config_id} title={label} action={<Badge tone="info">{run.trace.tool_calls.length} calls</Badge>} />{run.evaluation?.reasons.length ? <details className="trajectory-notes"><summary>Evaluator notes <ChevronDown size={14} /></summary><ul>{run.evaluation.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></details> : null}<div className="compact-trajectory">{run.trace.tool_calls.map((call) => <div key={`${label}-${call.sequence}`}><span>{call.sequence}</span><div><div className="compact-tool-heading"><strong>{humanizeToolName(call.tool_name)}</strong><small>{call.duration_ms} ms · {call.status}</small></div><p>{call.purpose}</p><EvidenceIds ids={call.evidence_ids} /></div></div>)}</div></Card>;
+  return <details className={`trajectory-disclosure trajectory-${label.toLowerCase()}`}><summary><span><small>{run.trace.agent_config_id} policy</small><strong>{label}</strong></span><Badge tone="info">{run.trace.tool_calls.length} calls</Badge><ChevronDown size={16} /></summary>{run.evaluation?.reasons.length ? <details className="trajectory-notes"><summary>Evaluator notes <ChevronDown size={14} /></summary><ul>{run.evaluation.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul></details> : null}<div className="compact-trajectory">{run.trace.tool_calls.map((call) => <div key={`${label}-${call.sequence}`}><span>{call.sequence}</span><div><div className="compact-tool-heading"><strong>{humanizeToolName(call.tool_name)}</strong><small>{call.duration_ms} ms · {call.status}</small></div><p title={call.purpose}>{call.purpose}</p><EvidenceIds ids={call.evidence_ids} /></div></div>)}</div></details>;
 }
 
 function PassFail({ value }: { value: boolean | null | undefined }) {
-  if (value == null) return <span className="passfail unknown">NOT SCORED</span>;
+  if (value == null) return <span className="passfail unknown">N/A</span>;
   return <span className={value ? "passfail pass" : "passfail fail"}>{value ? <CheckCircle2 size={14} /> : <XCircle size={14} />}{value ? "PASS" : "FAIL"}</span>;
 }
 
@@ -758,8 +771,17 @@ function historyStatus(item: InvestigationSummary): string {
 }
 
 function humanizeToolName(value: string): string { return value.split("_").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" "); }
+function formatIncidentId(value: string): string { return value.replace(/^inc_/i, "INC-").replace(/_/g, "-").toUpperCase(); }
+function compactText(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  const firstSentenceEnd = value.search(/[.!?](?:\s|$)/);
+  if (firstSentenceEnd >= 80 && firstSentenceEnd + 1 <= maxLength) return value.slice(0, firstSentenceEnd + 1);
+  const clipped = value.slice(0, maxLength + 1);
+  const lastSpace = clipped.lastIndexOf(" ");
+  return `${clipped.slice(0, lastSpace > 0 ? lastSpace : maxLength).trimEnd()}…`;
+}
 function severityTone(severity?: string): "danger" | "warning" | "neutral" { const value = severity?.toLowerCase() ?? ""; if (value.includes("1") || value.includes("critical")) return "danger"; if (value.includes("2") || value.includes("high")) return "warning"; return "neutral"; }
-function formatTimestamp(value?: string): string { if (!value) return "-"; const parsed = new Date(value); return Number.isNaN(parsed.valueOf()) ? value : parsed.toLocaleString([], { dateStyle: "medium", timeStyle: "short" }); }
+function formatTimestamp(value?: string): string { if (!value) return "-"; const parsed = new Date(value); return Number.isNaN(parsed.valueOf()) ? value : parsed.toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); }
 function formatHistoryTime(value: string): string { const parsed = new Date(value); return Number.isNaN(parsed.valueOf()) ? value : parsed.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }
 function formatEventTime(value: string): string { const parsed = new Date(value); return Number.isNaN(parsed.valueOf()) ? value : parsed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }); }
 function shortId(value: string): string { return value.length > 12 ? `${value.slice(0, 8)}…` : value; }

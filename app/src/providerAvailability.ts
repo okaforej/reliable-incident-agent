@@ -54,15 +54,15 @@ export function unavailableMessage(
   const action = operation === "investigation" ? "start a live investigation" : "run a live comparison";
   switch (availability.kind) {
     case "loading":
-      return `Checking API and OpenAI configuration before you can ${action}.`;
+      return "Checking live provider…";
     case "api_unavailable":
-      return `The API health check failed: ${availability.detail} Live model work is disabled.`;
+      return `API unavailable: ${availability.detail}`;
     case "api_unhealthy":
-      return `The API is not healthy: ${availability.detail} Live model work is disabled.`;
+      return `API unhealthy: ${availability.detail}`;
     case "key_missing":
-      return `Set OPENAI_API_KEY to ${action}. No recorded result will be substituted.`;
+      return `Set OPENAI_API_KEY to ${action}. Live results only.`;
     case "model_missing":
-      return `Set OPENAI_MODEL to a non-empty tool-capable model to ${action}.`;
+      return `Set OPENAI_MODEL to ${action}.`;
   }
 }
 

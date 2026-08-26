@@ -29,7 +29,7 @@ describe("comparison running state", () => {
     expect(html).toContain("01:05");
     expect(html).toContain("Baseline");
     expect(html).toContain("Candidate");
-    expect(html).toContain("Results appear together");
+    expect(html).toContain("Both results load together");
     expect(html).not.toContain("tool.started");
   });
 });
