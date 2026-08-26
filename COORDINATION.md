@@ -17,19 +17,19 @@ Streamlit UI
   -> run_investigation(...)
   -> observability tools
   -> Incident Replay repository
-  -> deterministic JSON scenario
+  -> SQLite replay store
 
 InvestigationTrace
   -> evaluate_trace(...)
   -> BehavioralEvaluation
 ```
 
-The implementation can stay simple: local Python, JSON fixtures, deterministic evaluation.
+The implementation should stay local and deterministic, but use real open-source components rather than ad hoc files.
 
 The architectural story is:
 
 ```text
-Prototype:  Agent -> tools -> Incident Replay repository -> JSON
+Prototype:  Agent -> tools -> Incident Replay repository -> SQLite
 Production: Agent -> tools -> Telemetry repository -> Grafana / Loki / Prometheus / Tempo
 ```
 
@@ -46,19 +46,17 @@ Makefile
 .gitignore
 
 data/
-  scenarios/
-    checkout_db_pool_exhaustion/
-      incident.json
-      metrics.json
-      logs.json
-      changes.json
-      topology.json
-      expected.json
+  seeds/
+    checkout_db_pool_exhaustion.sql
+
+var/
+  replays.sqlite
 
 src/
   reliable_incident_agent/
     __init__.py
     models.py
+    db.py
     replay.py
     tools.py
     investigator.py
@@ -77,21 +75,27 @@ tests/
 
 Use one Python package under `src/reliable_incident_agent/`. Do not create separate top-level packages like `agent/`, `tools/`, `shared/`, or `evaluation/`.
 
-## Minimal Open-Source Stack
+## Enterprise Open-Source Stack
 
-Use these because they add polish without infrastructure risk:
+Use these tools because they add real engineering surface without heavy infrastructure risk:
 
+- **SQLite** for deterministic incident replay storage.
+- **SQLAlchemy Core** for typed query boundaries over SQLite.
+- **Pydantic** for `models.py` contracts and payload validation.
+- **FastAPI** for an optional local service boundary and OpenAPI docs if the core flow is stable.
 - **Streamlit** for the local demo UI.
-- **Pydantic** for `models.py` contracts and fixture validation.
 - **Altair** for one or two incident evidence charts.
 - **pytest** or `unittest` for deterministic tests.
 - **Makefile** for `make demo`, `make test`, and `make app`.
+- **Ruff** for lint/format.
 
 Optional:
 
 - **Rich** for a clean CLI comparison table.
+- **OpenTelemetry Python** for local trace spans around investigations and tool calls.
+- **Phoenix** or **Langfuse** only if we can wire traces quickly without making the demo depend on an external service.
 
-Do not add FastAPI, Docker, a database, live Grafana/Prometheus/Loki, OpenTelemetry backends, Phoenix, Langfuse, or DeepEval unless the core demo is already working and the addition is clearly non-fragile.
+Do not add Docker, live Grafana/Prometheus/Loki, or a remote tracing backend for the first working demo.
 
 ## Shared Models
 
@@ -148,11 +152,13 @@ evaluate_trace(
 
 The UI should call only these APIs.
 
-## Evaluation Rule
+## Data And Evaluation Rules
 
 Evaluation must score only what the agent actually observed in `InvestigationTrace.tool_calls`.
 
-Do not let evaluator logic read telemetry fixtures, replay repositories, hidden evidence, or scenario files to decide whether the agent was grounded. If the agent did not retrieve evidence through a tool call, the evaluator must treat that evidence as unobserved.
+The runtime may query SQLite through `replay.py` and tool interfaces. The evaluator must not query SQLite, seed SQL, hidden evidence, or scenario metadata to decide whether the agent was grounded. If the agent did not retrieve evidence through a tool call, the evaluator must treat that evidence as unobserved.
+
+`ExpectedOutcome` may come from SQLite or seed data only after the trace has been produced, and only for RCA correctness.
 
 ## Required Demo Case
 
@@ -208,7 +214,6 @@ Do not build:
 - full RCA platform;
 - production Grafana integration;
 - live telemetry stack;
-- database;
 - auth;
 - Slack or ticketing integration;
 - multiple scenarios before the first one is excellent.
