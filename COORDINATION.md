@@ -1,72 +1,48 @@
 # Reliable Incident Agent Coordination
 
-## Current Direction
+## Goal
 
-We are in cleanup and convergence mode.
+Build a polished local prototype for the Grafana AI/ML take-home:
 
-The prototype should look enterprise-grade by presenting a clean architecture, not by adding fragile infrastructure. The implementation should converge around an **Incident Replay** abstraction:
+> **Right answer, right reasons.**
+
+The demo must show that final RCA accuracy is not enough. Two investigation trajectories can reach the same correct RCA, while only one gathered enough relevant evidence to be operationally reliable.
+
+## Architecture
+
+Use **Incident Replay** as the enterprise-grade abstraction:
 
 ```text
-UI / Demo
-  -> Investigator runtime
-  -> Tool interfaces
+Streamlit UI
+  -> run_investigation(...)
+  -> observability tools
   -> Incident Replay repository
-  -> Deterministic JSON fixtures
+  -> deterministic JSON scenario
 
 InvestigationTrace
-  -> Behavioral evaluator
-  -> Behavioral SLO result
+  -> evaluate_trace(...)
+  -> BehavioralEvaluation
 ```
 
-The Staff-level framing:
+The implementation can stay simple: local Python, JSON fixtures, deterministic evaluation.
 
-> Deterministic incident replays let us compare agent versions and trajectories against identical operational conditions. Behavioral evaluation then asks whether the agent chose to obtain and use the right evidence, not merely whether the right evidence existed somewhere in the dataset.
+The architectural story is:
 
-## Scope Discipline
-
-Optimize for a polished, reliable local demo.
-
-Do not add:
-
-- external databases;
-- streaming telemetry;
-- Prometheus, Loki, Tempo, Grafana, or OpenTelemetry backends;
-- Docker Compose infrastructure;
-- authentication;
-- persistence beyond local fixtures;
-- duplicate agent implementations;
-- broad eval platforms.
-
-Add an open-source tool only if it improves demo clarity, startup reliability, or enterprise polish with low implementation cost.
-
-## Preferred Open-Source Stack
-
-Use this stack unless there is a concrete reason not to:
-
-- **Python dataclasses or Pydantic** for shared contracts and validation.
-- **Streamlit** for the demo UI if already working.
-- **pytest** or `unittest` for deterministic smoke/evaluator tests.
-- **Ruff** for formatting/linting if time permits.
-- **Rich** for a polished CLI trace view if the CLI becomes part of the demo.
-- **Altair/Plotly** only for small evidence visuals that clarify the incident timeline.
-
-Optional but not required:
-
-- **FastAPI** only if a service boundary already exists or can be added without rewriting the working Streamlit flow.
-- **Phoenix, Langfuse, or OpenLIT** only if working quickly and used as trace visualization, not as a required runtime dependency.
-- **DeepEval** only if it wraps our existing deterministic behavioral checks without hiding the simple thesis.
-
-Default decision: keep JSON fixtures, repository/tool interfaces, deterministic evaluation, and the existing local UI.
+```text
+Prototype:  Agent -> tools -> Incident Replay repository -> JSON
+Production: Agent -> tools -> Telemetry repository -> Grafana / Loki / Prometheus / Tempo
+```
 
 ## Repository Shape
 
-Target structure:
+Build toward this structure:
 
 ```text
 .
 README.md
 COORDINATION.md
 requirements.txt
+Makefile
 .gitignore
 
 data/
@@ -99,13 +75,29 @@ tests/
   test_runtime_evaluation.py
 ```
 
-Use one Python package under `src/` instead of recreating separate top-level packages such as `agent/`, `tools/`, `shared/`, and `evaluation/`. That keeps the polished implementation easy to inspect and reduces import drift.
+Use one Python package under `src/reliable_incident_agent/`. Do not create separate top-level packages like `agent/`, `tools/`, `shared/`, or `evaluation/`.
 
-## Shared Contract
+## Minimal Open-Source Stack
 
-Source of truth should be `src/reliable_incident_agent/models.py`.
+Use these because they add polish without infrastructure risk:
 
-Use Pydantic if available; dataclasses are acceptable if they keep the demo simpler. Either way, keep the contract small:
+- **Streamlit** for the local demo UI.
+- **Pydantic** for `models.py` contracts and fixture validation.
+- **Altair** for one or two incident evidence charts.
+- **pytest** or `unittest` for deterministic tests.
+- **Makefile** for `make demo`, `make test`, and `make app`.
+
+Optional:
+
+- **Rich** for a clean CLI comparison table.
+
+Do not add FastAPI, Docker, a database, live Grafana/Prometheus/Loki, OpenTelemetry backends, Phoenix, Langfuse, or DeepEval unless the core demo is already working and the addition is clearly non-fragile.
+
+## Shared Models
+
+`src/reliable_incident_agent/models.py` is the source of truth.
+
+Keep the contract small:
 
 ```python
 ToolCall:
@@ -117,9 +109,11 @@ ToolCall:
 InvestigationTrace:
     incident_id: str
     incident_description: str
-    expected_root_cause: str
     tool_calls: list[ToolCall]
     final_root_cause: str
+
+ExpectedOutcome:
+    root_cause: str
 
 BehavioralEvaluation:
     rca_correct: bool
@@ -130,56 +124,11 @@ BehavioralEvaluation:
     reasons: list[str]
 ```
 
-Keep this intentionally small. Do not create a second trace schema or a package-local duplicate.
+The investigator must not receive `ExpectedOutcome` or any hidden root-cause field. The evaluator may receive `ExpectedOutcome` only after the trace has been produced.
 
-`expected_root_cause` is evaluation-only metadata. The investigator must not receive it in its prompt or tool context.
+## Public APIs
 
-## Ownership Boundaries
-
-Codex is lead for architecture, cleanup review, and coordination.
-
-Runtime/demo implementation scope:
-
-- `data/scenarios/`
-- `src/reliable_incident_agent/replay.py`
-- `src/reliable_incident_agent/tools.py`
-- `src/reliable_incident_agent/investigator.py`
-- `app/`
-- `scripts/run_demo.py`
-
-Evaluation implementation scope:
-
-- `src/reliable_incident_agent/evaluator.py`
-- `tests/`
-
-Shared contract scope:
-
-- `src/reliable_incident_agent/models.py`
-
-Only one engineer should edit `models.py` at a time. If either side needs a contract change, record it here before coding against it.
-
-## Guide For Copilot
-
-Convergence rule: implement one polished vertical slice only.
-
-Copilot should implement against the package structure above and consume only the public runtime/contract APIs.
-
-Thesis to preserve:
-
-> Reliable incident agents should be evaluated on both final RCA correctness and observable investigation behavior.
-
-The demo must show two traces for the same incident with the same correct RCA:
-
-- a weak/lucky trajectory that fails behavioral SLOs;
-- a well-supported trajectory that passes behavioral SLOs.
-
-Critical rule:
-
-> Evaluation must operate on what the agent actually observed, not on all telemetry available in the replay fixture.
-
-Do not query JSON fixtures, replay repositories, telemetry files, or hidden expected evidence from evaluator logic. If the agent did not call a tool and retrieve a result, the evaluator should treat that evidence as unobserved.
-
-Runtime public API:
+Runtime:
 
 ```python
 run_investigation(
@@ -188,7 +137,7 @@ run_investigation(
 ) -> InvestigationTrace
 ```
 
-Evaluator public API:
+Evaluation:
 
 ```python
 evaluate_trace(
@@ -197,67 +146,71 @@ evaluate_trace(
 ) -> BehavioralEvaluation
 ```
 
-The UI should import only those two APIs.
+The UI should call only these APIs.
 
-Preferred behavioral dimensions:
+## Evaluation Rule
 
-- **Grounded Investigation:** retrieved tool results visibly support the RCA.
-- **Investigation Sufficiency:** retrieved evidence distinguishes the RCA from plausible alternatives.
-- **Tool Efficiency:** no redundant, irrelevant, or excessive calls.
+Evaluation must score only what the agent actually observed in `InvestigationTrace.tool_calls`.
 
-Do not require an exact golden sequence. Valid trajectories may differ.
+Do not let evaluator logic read telemetry fixtures, replay repositories, hidden evidence, or scenario files to decide whether the agent was grounded. If the agent did not retrieve evidence through a tool call, the evaluator must treat that evidence as unobserved.
 
-Required comparison case:
+## Required Demo Case
+
+Implement one polished scenario first:
+
+`checkout_db_pool_exhaustion`
+
+The reliable path should gather enough evidence to connect:
+
+- checkout latency/errors;
+- checkout dependency on postgres;
+- postgres connection saturation;
+- recent checkout DB pool configuration change;
+- final RCA.
+
+The weak path should reach the same final RCA but with insufficient evidence.
+
+Expected comparison:
 
 ```text
-Weak trajectory:
-  RCA correct
-  Evidence weak/insufficient
-  Behavioral SLO FAIL
-
-Reliable trajectory:
-  RCA correct
-  Evidence grounded and sufficient
-  Behavioral SLO PASS
+                 Weak Agent      Reliable Agent
+RCA correct      PASS            PASS
+Grounded         FAIL            PASS
+Sufficient       FAIL            PASS
+Efficient        PASS            PASS
+Behavioral SLO   FAIL            PASS
 ```
 
-This is the core demo. Protect it.
+## Behavioral SLIs
+
+Use deterministic, explainable checks:
+
+- **Grounded Investigation:** retrieved tool results visibly support the RCA.
+- **Investigation Sufficiency:** evidence distinguishes the RCA from plausible alternatives.
+- **Tool Efficiency:** no redundant, irrelevant, or excessive calls.
+
+Do not require a golden tool sequence. Valid trajectories may differ.
+
+## Tests
 
 Tests must prove:
 
 - weak trace: RCA correct, behavioral SLO fails;
 - reliable trace: RCA correct, behavioral SLO passes;
-- incorrect RCA is reported separately from behavior quality.
+- incorrect RCA is reported separately from behavior quality;
+- evaluator scores observed tool results, not hidden fixture evidence.
 
-## Cleanup Guidance
+## Scope Boundaries
 
-Remove or avoid:
+Do not build:
 
-- unused framework scaffolding;
-- duplicate data loaders;
-- direct fixture reads from the agent or evaluator;
-- hard-coded “always call logs -> metrics -> changes” paths;
-- UI decoration that does not clarify the experiment;
-- dependencies that are not required to run the demo.
-- real API keys or local secrets.
+- generic chatbot;
+- full RCA platform;
+- production Grafana integration;
+- live telemetry stack;
+- database;
+- auth;
+- Slack or ticketing integration;
+- multiple scenarios before the first one is excellent.
 
-Keep or add:
-
-- one command to run the demo;
-- one command to run tests;
-- deterministic fixtures;
-- clear repository/tool boundaries;
-- side-by-side weak vs reliable comparison;
-- concise README explaining Incident Replay and behavioral SLOs.
-- a small `Makefile` if it improves local ergonomics.
-- Altair charts only if they clarify the incident evidence timeline.
-
-## Lead Decisions
-
-- Use **Incident Replay over JSON** as the enterprise-grade abstraction.
-- Keep the implementation local and deterministic.
-- Prefer internal repository/tool boundaries over adding FastAPI.
-- Do not introduce live telemetry infrastructure.
-- Evaluation is trajectory-only.
-- Best minimal polish stack: **Streamlit + Pydantic + Altair + pytest/unittest + Makefile**, optional **Rich** for CLI tables.
-- The final demo should communicate: **right answer is not enough; right answer plus right investigative behavior is reliable.**
+Keep the demo reliable, readable, and runnable locally.
