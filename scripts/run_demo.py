@@ -22,7 +22,15 @@ def main() -> None:
     baseline_eval = evaluate_trace(baseline_trace, expected)
     candidate_eval = evaluate_trace(candidate_trace, expected)
 
-    table = Table(title="Reliable Incident Agent: Output Accuracy Hid a Regression")
+    console = Console()
+    console.print("[bold]Output-only evaluation[/bold]")
+    console.print(f"Baseline RCA accuracy: {_status(baseline_eval.rca_correct)}")
+    console.print(f"Candidate RCA accuracy: {_status(candidate_eval.rca_correct)}")
+    console.print("\n[bold]Identical final RCA[/bold]")
+    console.print(baseline_trace.final_root_cause)
+    console.print("\nIf final RCA accuracy is the quality metric, these configurations appear equivalent.")
+
+    table = Table(title="Behavioral SLO Reveal")
     table.add_column("Metric")
     table.add_column("Baseline")
     table.add_column("Candidate")
@@ -36,10 +44,7 @@ def main() -> None:
     for label, baseline_value, candidate_value in rows:
         table.add_row(label, _status(baseline_value), _status(candidate_value))
 
-    console = Console()
     console.print(table)
-    console.print("\n[bold]Final RCA[/bold]")
-    console.print(baseline_trace.final_root_cause)
     console.print("\n[bold]Baseline evaluator reasons[/bold]")
     for reason in baseline_eval.reasons:
         console.print(f"- {reason}")

@@ -80,6 +80,7 @@ def _run_payments_gateway(
     tools.get_service_health("payments")
     tools.get_metrics("payments", metric_name="gateway.timeout.rate_per_min")
     tools.search_logs("payments", query="gateway")
+    tools.get_service_health("postgres")
     tools.get_recent_changes("payments")
     return InvestigationTrace(
         incident_id=str(incident["id"]),

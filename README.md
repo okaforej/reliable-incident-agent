@@ -93,25 +93,40 @@ Expected command behavior:
 
 ## Demo Path
 
-1. Start the backend with `make api`.
-2. Start the frontend with `make app`.
-3. Open the incident command center.
-4. Select `checkout_db_pool_exhaustion`.
-5. Run the comparison.
-6. Show that both configurations return the same RCA.
-7. Establish that output-only RCA accuracy makes them appear equivalent.
-8. Reveal Behavioral SLO results: baseline passes and candidate fails.
-9. Inspect the candidate trajectory: a plausible shortcut, correct RCA,
-   insufficient evidence, behavioral SLO fail.
-10. Inspect the baseline trajectory: checkout symptoms, dependency traversal to
-   postgres, postgres connection saturation, checkout DB pool config change,
-   collateral payments symptoms ruled out, behavioral SLO pass.
-11. Use the SLO panel to explain the core distinction: answer correctness is
-   reported separately from investigation reliability.
-12. Switch to `payments_gateway_timeout` to show a different valid path through
-    the payments dependency.
-13. Switch to `insufficient_frontend_evidence` to show the agent avoiding an
-    unjustified RCA when the replay lacks conclusive evidence.
+1. Start the backend with `make api` and the frontend with `make app`.
+2. Open the incident command center and select `checkout_db_pool_exhaustion`.
+3. Run the comparison and pause on the output-only panel: Version A RCA PASS,
+   Version B RCA PASS, identical final RCA.
+4. State the apparent output-layer conclusion: the versions look equivalent.
+5. Click `Reveal SLO`: Version A passes the Behavioral SLO and Version B fails.
+6. Inspect Version B: it reached the correct RCA from checkout-local timeout
+   logs without enough postgres, change, and alternative-dependency evidence.
+7. Inspect Version A: it traversed checkout dependencies, observed postgres
+   saturation, retrieved the checkout DB pool change, and ruled out collateral
+   payments symptoms.
+8. Switch to `payments_gateway_timeout` to show a different valid investigation
+   path through the payments dependency.
+9. Switch to `insufficient_frontend_evidence` to show the agent avoiding an
+   unjustified RCA when the replay lacks conclusive evidence.
+
+Two-minute talk track:
+
+- 0:00 - Reliability engineering for incident agents asks whether a new model,
+  prompt, or tool configuration stayed reliable, not only whether it produced
+  the same final answer.
+- 0:20 - Run the deterministic replay comparison.
+- 0:40 - Show RCA parity: both configurations produce the correct final RCA, so
+  output-only evaluation says they are equivalent.
+- 1:00 - Reveal Behavioral SLOs: the baseline passes and the candidate fails.
+- 1:25 - Explain the trajectory gap: one investigation gathered distinguishing
+  operational evidence; the other took a plausible shortcut.
+- 1:50 - Switch scenarios to prove the replay/evaluator is not hard-coded to one
+  incident class.
+
+No OpenAI API key is required for the core demo. FastAPI exposes the local
+OpenAPI contract at `/openapi.json`; the investigator itself is deterministic
+over SQLite replay evidence so reviewers can reproduce every run without
+external credentials.
 
 ## Expected Backend Interfaces
 

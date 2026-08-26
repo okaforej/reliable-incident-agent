@@ -29,6 +29,7 @@ CONCEPTS = {
     },
     "timeout_change": {"timeout_ms", "timeout to 500", "500 ms", "500ms", "lowered"},
 }
+TOOL_CALL_BUDGET = 8
 
 
 def evaluate_trace(trace: InvestigationTrace, expected: ExpectedOutcome) -> BehavioralEvaluation:
@@ -52,9 +53,11 @@ def evaluate_trace(trace: InvestigationTrace, expected: ExpectedOutcome) -> Beha
         else bool(claimed) and claimed <= supported
     )
     reasons.append(
-        "Observed tool results support the causal concepts in the RCA."
+        "Observed evidence supports claimed concepts: " + ", ".join(sorted(claimed)) + "."
         if grounded
-        else "Observed tool results do not support every causal concept in the RCA."
+        else "Observed evidence is missing support for claimed concepts: "
+        + ", ".join(sorted(claimed - supported))
+        + "."
     )
 
     families = _evidence_families(trace.tool_calls)
@@ -65,15 +68,20 @@ def evaluate_trace(trace: InvestigationTrace, expected: ExpectedOutcome) -> Beha
         and _has_tool(trace, "get_metrics")
         and _has_tool(trace, "get_recent_changes")
         and len(families) >= 3
+        and _distinguishes_plausible_alternatives(trace, claimed)
     )
     if investigation_sufficient and inconclusive_actual:
         reasons.append("Investigation gathered enough evidence to justify an inconclusive RCA.")
     elif investigation_sufficient:
-        reasons.append("Investigation gathered topology, runtime signal, and change evidence.")
+        reasons.append(
+            "Investigation gathered evidence families: "
+            + ", ".join(sorted(families))
+            + "."
+        )
     else:
         reasons.append("Investigation lacks enough independent evidence to distinguish alternatives.")
 
-    efficiency_issues = _efficiency_issues(trace.tool_calls)
+    efficiency_issues = _efficiency_issues(trace)
     tool_efficient = not efficiency_issues
     reasons.append(
         "Tool trajectory stayed focused and non-duplicative."
@@ -86,7 +94,7 @@ def evaluate_trace(trace: InvestigationTrace, expected: ExpectedOutcome) -> Beha
         grounded=grounded,
         investigation_sufficient=investigation_sufficient,
         tool_efficient=tool_efficient,
-        behavioral_slo_pass=grounded and investigation_sufficient and tool_efficient,
+        behavioral_slo_pass=rca_correct and grounded and investigation_sufficient and tool_efficient,
         reasons=reasons,
     )
 
@@ -135,6 +143,34 @@ def _has_tool(trace: InvestigationTrace, tool_name: str) -> bool:
     return any(call.tool_name == tool_name and _informative(call) for call in trace.tool_calls)
 
 
+def _distinguishes_plausible_alternatives(
+    trace: InvestigationTrace,
+    claimed_concepts: set[str],
+) -> bool:
+    evidence_text = " ".join(_flatten(call.result) for call in trace.tool_calls).lower()
+    services = {
+        service
+        for call in trace.tool_calls
+        if isinstance((service := call.arguments.get("service")), str)
+    }
+
+    if {"checkout", "postgres", "connection_exhaustion", "db_pool_change"} <= claimed_concepts:
+        return (
+            "checkout" in services
+            and "postgres" in services
+            and "payments" in services
+        )
+
+    if {"payments", "gateway_timeout", "timeout_change"} <= claimed_concepts:
+        return (
+            "checkout" in services
+            and "payments" in services
+            and ("postgres" in services or "postgres" in evidence_text)
+        )
+
+    return True
+
+
 def _informative(call: ToolCall) -> bool:
     result = call.result
     if call.tool_name == "search_logs":
@@ -164,10 +200,13 @@ def _evidence_families(calls: list[ToolCall]) -> set[str]:
     return families
 
 
-def _efficiency_issues(calls: list[ToolCall]) -> list[str]:
+def _efficiency_issues(trace: InvestigationTrace) -> list[str]:
+    calls = trace.tool_calls
     issues: list[str] = []
-    if len(calls) > 8:
-        issues.append(f"{len(calls)} calls exceeds the eight-call budget")
+    if len(calls) > TOOL_CALL_BUDGET:
+        issues.append(
+            f"{len(calls)} calls exceeds the {TOOL_CALL_BUDGET}-call budget"
+        )
     signatures = [
         (call.tool_name, json.dumps(call.arguments, sort_keys=True, default=str))
         for call in calls
@@ -184,4 +223,20 @@ def _efficiency_issues(calls: list[ToolCall]) -> list[str]:
     unknown = sorted({call.tool_name for call in calls} - known)
     if unknown:
         issues.append("unknown tools: " + ", ".join(unknown))
+    relevant_text = _normalize(trace.final_root_cause) + " " + " ".join(
+        _normalize(_flatten(call.result))
+        for call in calls
+        if call.tool_name == "get_dependencies"
+    )
+    irrelevant = sorted(
+        {
+            service
+            for call in calls
+            if call.tool_name in known
+            and isinstance((service := call.arguments.get("service")), str)
+            and _normalize(service) not in relevant_text
+        }
+    )
+    if irrelevant:
+        issues.append("irrelevant service queries: " + ", ".join(irrelevant))
     return issues

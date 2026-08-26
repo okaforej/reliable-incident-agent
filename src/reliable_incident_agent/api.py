@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .db import DB_PATH, init_db
@@ -46,19 +46,28 @@ def list_scenarios() -> list[ScenarioSummary]:
 
 @app.get("/scenarios/{scenario_id}", response_model=ScenarioDetail)
 def get_scenario(scenario_id: str) -> ScenarioDetail:
-    return _repo().get_scenario(scenario_id)
+    try:
+        return _repo().get_scenario(scenario_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Unknown scenario: {scenario_id}") from exc
 
 
 @app.get("/scenarios/{scenario_id}/evidence", response_model=ScenarioEvidence)
 def get_evidence(scenario_id: str) -> ScenarioEvidence:
-    return _repo().get_evidence(scenario_id)
+    try:
+        return _repo().get_evidence(scenario_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Unknown scenario: {scenario_id}") from exc
 
 
 @app.post("/investigations", response_model=InvestigationResponse)
 def create_investigation(request: InvestigationRequest) -> InvestigationResponse:
     repo = _repo()
-    trace = run_investigation(request.scenario_id, request.mode, repo)
-    expected = repo.get_expected_outcome(request.scenario_id)
+    try:
+        trace = run_investigation(request.scenario_id, request.mode, repo)
+        expected = repo.get_expected_outcome(request.scenario_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Unknown scenario: {request.scenario_id}") from exc
     evaluation = evaluate_trace(trace, expected)
     run_id = repo.persist_run(request.scenario_id, request.mode, trace, evaluation)
     return InvestigationResponse(run_id=run_id, trace=trace, evaluation=evaluation)

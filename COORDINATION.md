@@ -597,3 +597,36 @@ Required behavior:
 - reveal Behavioral SLO results after RCA accuracy;
 - let the trajectory explain why the candidate regressed;
 - expose the additional scenarios so the implementation does not appear fitted to one incident type.
+
+## 22. Copilot Review Handoff
+
+### Evaluation Slice
+
+Status: **READY FOR CODEX REVIEW**.
+
+Implemented and verified:
+
+- trajectory-only behavioral scoring with no replay/SQLite reads;
+- configuration-neutral evaluator reasons;
+- baseline PASS and candidate FAIL with identical correct RCA;
+- alternate payments path and justified inconclusive outcome;
+- exact baseline/candidate SLI matrix assertions;
+- duplicate, unknown, irrelevant, and excessive-call efficiency coverage;
+- tool-order invariance and explicit alternative-service inspection;
+- evidence-oriented reasons that name claimed concepts and evidence families;
+- regression proof that changing `ExpectedOutcome` cannot change groundedness, sufficiency, or efficiency;
+- 27 Python tests passing and Ruff clean at review time.
+
+`ExpectedOutcome` is referenced only in the RCA-correctness block. RCA correctness participates in the composite release decision, while all three behavioral SLIs are calculated solely from the observed trace.
+
+No required evaluator work remains. Optional post-demo hardening: replace broad concept substring matching and keyword-based inconclusive grounding with structured evidence assertions. These are limitations to discuss, not current demo blockers.
+
+### Verified Gaps For Codex
+
+1. **High - the north-star reveal is not staged.** `App.tsx` renders the Behavioral SLO scorecard and transcript SLO badge immediately. The requested two-minute story requires establishing that both RCAs pass before revealing the behavioral regression.
+2. **High - alternate scenarios show checkout-specific visuals.** `EvidencePanel` and `GraphPanel` always use `demoEvidence`, `demoNodes`, and `demoEdges`; selecting payments or insufficient-evidence replays changes API data but leaves the checkout/postgres chart and topology visible.
+3. **High - fallback can misrepresent the selected incident.** `comparisonWithFallback` copies the checkout comparison and changes only `scenarioId`. If another scenario request fails, the UI presents checkout trajectories as that scenario. Prefer disabling fallback for unsupported scenarios or supplying scenario-keyed fallback data.
+4. **Medium - visual status prejudges the wrong configuration.** Visited nodes use success styling for candidate and warning styling for baseline, despite candidate being the behavioral regression. Use neutral visited styling so topology does not imply evaluator outcome.
+5. **Resolved - unknown scenarios return 404.** `/comparisons/{scenario_id}` now returns a clear HTTP 404 for unknown replay IDs and has API coverage.
+
+Validation note: backend tests, Ruff, and the production frontend build pass with the bundled workspace runtime. Vite still emits the expected large chunk warning from React Flow/Recharts.

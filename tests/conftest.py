@@ -236,4 +236,15 @@ def strong_evidence_tool_calls() -> list[Any]:
             },
             {"service": "checkout", "query": "postgres connection"},
         ),
+        make_tool_call(
+            6,
+            "get_service_health",
+            {
+                "evidence_id": "health-payments-collateral",
+                "service": "payments",
+                "status": "degraded",
+                "symptoms": ["upstream_cancellations_after_checkout_queueing"],
+            },
+            {"service": "payments"},
+        ),
     ]

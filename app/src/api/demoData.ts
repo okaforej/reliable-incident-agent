@@ -13,6 +13,26 @@ export const demoScenarios: Scenario[] = [
     timeWindow: "10:02-10:34 UTC",
     affectedServices: ["checkout", "postgres", "payments"],
     recentChanges: ["checkout deploy changed max_open_connections from 20 to 80 at 09:57 UTC"]
+  },
+  {
+    id: "payments_gateway_timeout",
+    name: "Payments gateway timeout",
+    description:
+      "Checkout payment failures followed a payments timeout configuration change against the external card gateway.",
+    severity: "SEV-2",
+    timeWindow: "15:05-15:25 UTC",
+    affectedServices: ["checkout", "payments", "external-card-gateway", "postgres"],
+    recentChanges: ["payments deploy lowered external card gateway timeout to 500 ms at 15:01 UTC"]
+  },
+  {
+    id: "insufficient_frontend_evidence",
+    name: "Frontend inconclusive evidence",
+    description:
+      "Frontend product page errors have observable symptoms but the replay lacks conclusive causal evidence.",
+    severity: "SEV-3",
+    timeWindow: "11:32-11:45 UTC",
+    affectedServices: ["frontend", "checkout"],
+    recentChanges: ["no causal frontend change available in the replay evidence"]
   }
 ];
 
@@ -148,6 +168,206 @@ export const demoComparison: Comparison = {
         "Version B stops after checkout-local timeout evidence and does not retrieve postgres saturation evidence.",
         "Version B misses the checkout configuration change that distinguishes cause from symptom."
       ]
+    }
+  }
+};
+
+const paymentsRootCause =
+  "Checkout payment failures were caused by payments gateway timeouts after payments lowered the external card gateway timeout to 500 ms.";
+
+const inconclusiveRootCause =
+  "Insufficient evidence to determine a single root cause for the frontend product page errors.";
+
+export const demoComparisons: Record<string, Comparison> = {
+  checkout_db_pool_exhaustion: demoComparison,
+  payments_gateway_timeout: {
+    scenarioId: "payments_gateway_timeout",
+    baseline: {
+      mode: "baseline",
+      runId: "demo-payments-baseline",
+      trace: {
+        incidentId: "inc-payments-gateway-001",
+        incidentDescription: "Checkout payment authorization failures increased while postgres stayed healthy.",
+        toolCalls: [
+          {
+            sequence: 1,
+            toolName: "get_service_health",
+            arguments: { service: "checkout" },
+            result: { status: "degraded", summary: "checkout reports payment_authorization_failed responses" }
+          },
+          {
+            sequence: 2,
+            toolName: "get_dependencies",
+            arguments: { service: "checkout" },
+            result: { dependencies: ["payments", "postgres"], summary: "checkout payment path depends on payments" }
+          },
+          {
+            sequence: 3,
+            toolName: "get_metrics",
+            arguments: { service: "payments", metric_name: "gateway.timeout.rate_per_min" },
+            result: { summary: "payments gateway timeout rate spiked after the timeout change" }
+          },
+          {
+            sequence: 4,
+            toolName: "get_service_health",
+            arguments: { service: "postgres" },
+            result: { status: "healthy", summary: "postgres connections remained below saturation" }
+          },
+          {
+            sequence: 5,
+            toolName: "get_recent_changes",
+            arguments: { service: "payments" },
+            result: { summary: "payments lowered external card gateway timeout to 500 ms" }
+          }
+        ],
+        finalRootCause: paymentsRootCause
+      },
+      evaluation: {
+        rcaCorrect: true,
+        grounded: true,
+        investigationSufficient: true,
+        toolEfficient: true,
+        behavioralSloPass: true,
+        reasons: ["Final RCA matches expected root cause.", "Investigation gathered dependency, runtime, and change evidence."]
+      }
+    },
+    candidate: {
+      mode: "candidate",
+      runId: "demo-payments-candidate",
+      trace: {
+        incidentId: "inc-payments-gateway-001",
+        incidentDescription: "Checkout payment authorization failures increased while postgres stayed healthy.",
+        toolCalls: [
+          {
+            sequence: 1,
+            toolName: "get_service_health",
+            arguments: { service: "checkout" },
+            result: { status: "degraded", summary: "checkout reports payment_authorization_failed responses" }
+          },
+          {
+            sequence: 2,
+            toolName: "get_dependencies",
+            arguments: { service: "checkout" },
+            result: { dependencies: ["payments", "postgres"], summary: "checkout payment path depends on payments" }
+          },
+          {
+            sequence: 3,
+            toolName: "get_metrics",
+            arguments: { service: "payments", metric_name: "gateway.timeout.rate_per_min" },
+            result: { summary: "payments gateway timeout rate spiked after the timeout change" }
+          },
+          {
+            sequence: 4,
+            toolName: "get_service_health",
+            arguments: { service: "postgres" },
+            result: { status: "healthy", summary: "postgres connections remained below saturation" }
+          },
+          {
+            sequence: 5,
+            toolName: "get_recent_changes",
+            arguments: { service: "payments" },
+            result: { summary: "payments lowered external card gateway timeout to 500 ms" }
+          }
+        ],
+        finalRootCause: paymentsRootCause
+      },
+      evaluation: {
+        rcaCorrect: true,
+        grounded: true,
+        investigationSufficient: true,
+        toolEfficient: true,
+        behavioralSloPass: true,
+        reasons: ["Final RCA matches expected root cause.", "Investigation gathered dependency, runtime, and change evidence."]
+      }
+    }
+  },
+  insufficient_frontend_evidence: {
+    scenarioId: "insufficient_frontend_evidence",
+    baseline: {
+      mode: "baseline",
+      runId: "demo-frontend-baseline",
+      trace: {
+        incidentId: "inc-frontend-inconclusive-001",
+        incidentDescription: "Frontend product page errors increased without conclusive causal evidence.",
+        toolCalls: [
+          {
+            sequence: 1,
+            toolName: "get_service_health",
+            arguments: { service: "frontend" },
+            result: { status: "degraded", summary: "frontend HTTP 500 rate increased" }
+          },
+          {
+            sequence: 2,
+            toolName: "search_logs",
+            arguments: { service: "frontend" },
+            result: { summary: "product page render failed after cache miss" }
+          },
+          {
+            sequence: 3,
+            toolName: "get_dependencies",
+            arguments: { service: "frontend" },
+            result: { dependencies: ["checkout"], summary: "frontend depends on checkout for product actions" }
+          },
+          {
+            sequence: 4,
+            toolName: "get_recent_changes",
+            arguments: { service: "frontend" },
+            result: { changes: [], summary: "no matching frontend deployment or config change in the window" }
+          }
+        ],
+        finalRootCause: inconclusiveRootCause
+      },
+      evaluation: {
+        rcaCorrect: true,
+        grounded: true,
+        investigationSufficient: true,
+        toolEfficient: true,
+        behavioralSloPass: true,
+        reasons: ["Final RCA matches expected root cause.", "Investigation gathered enough evidence to justify an inconclusive RCA."]
+      }
+    },
+    candidate: {
+      mode: "candidate",
+      runId: "demo-frontend-candidate",
+      trace: {
+        incidentId: "inc-frontend-inconclusive-001",
+        incidentDescription: "Frontend product page errors increased without conclusive causal evidence.",
+        toolCalls: [
+          {
+            sequence: 1,
+            toolName: "get_service_health",
+            arguments: { service: "frontend" },
+            result: { status: "degraded", summary: "frontend HTTP 500 rate increased" }
+          },
+          {
+            sequence: 2,
+            toolName: "search_logs",
+            arguments: { service: "frontend" },
+            result: { summary: "product page render failed after cache miss" }
+          },
+          {
+            sequence: 3,
+            toolName: "get_dependencies",
+            arguments: { service: "frontend" },
+            result: { dependencies: ["checkout"], summary: "frontend depends on checkout for product actions" }
+          },
+          {
+            sequence: 4,
+            toolName: "get_recent_changes",
+            arguments: { service: "frontend" },
+            result: { changes: [], summary: "no matching frontend deployment or config change in the window" }
+          }
+        ],
+        finalRootCause: inconclusiveRootCause
+      },
+      evaluation: {
+        rcaCorrect: true,
+        grounded: true,
+        investigationSufficient: true,
+        toolEfficient: true,
+        behavioralSloPass: true,
+        reasons: ["Final RCA matches expected root cause.", "Investigation gathered enough evidence to justify an inconclusive RCA."]
+      }
     }
   }
 };

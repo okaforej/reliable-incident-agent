@@ -70,6 +70,9 @@ def test_insufficient_evidence_scenario_avoids_overclaiming() -> None:
 
     assert "Insufficient evidence" in trace.final_root_cause
     assert evaluation.rca_correct is True
+    assert evaluation.grounded is True
+    assert evaluation.investigation_sufficient is True
+    assert evaluation.tool_efficient is True
     assert evaluation.behavioral_slo_pass is True
 
 

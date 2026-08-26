@@ -1,4 +1,4 @@
-import { demoComparison, demoScenarios } from "./demoData";
+import { demoComparison, demoComparisons, demoScenarios } from "./demoData";
 import type {
   AgentMode,
   BehavioralEvaluation,
@@ -42,7 +42,7 @@ export function comparisonWithFallback(data: Comparison | undefined, scenarioId:
     return data;
   }
 
-  return { ...demoComparison, scenarioId };
+  return demoComparisons[scenarioId] ?? demoComparison;
 }
 
 function normalizeScenarios(payload: unknown): Scenario[] {
@@ -55,17 +55,19 @@ function normalizeScenarios(payload: unknown): Scenario[] {
   return items.map((item) => {
     const record = getRecord(item);
     const id = stringValue(record.scenario_id ?? record.id, demoScenarios[0].id);
+    const fallback = demoScenarios.find((scenario) => scenario.id === id) ?? demoScenarios[0];
     const affected = record.affected_services ?? record.affectedServices ?? record.services ?? record.affected_service;
     const recentChanges = record.recent_changes ?? record.recentChanges ?? record.changes;
+    const hasAffectedList = Boolean(record.affected_services ?? record.affectedServices ?? record.services);
 
     return {
       id,
-      name: stringValue(record.name ?? record.title, humanize(id)),
-      description: stringValue(record.description ?? record.summary, demoScenarios[0].description),
-      severity: stringValue(record.severity, demoScenarios[0].severity),
-      timeWindow: normalizeTimeWindow(record.time_window ?? record.timeWindow ?? record.window),
-      affectedServices: stringArray(affected, demoScenarios[0].affectedServices),
-      recentChanges: stringArray(recentChanges, demoScenarios[0].recentChanges)
+      name: stringValue(record.name ?? record.title, fallback.name || humanize(id)),
+      description: stringValue(record.description ?? record.summary, fallback.description),
+      severity: stringValue(record.severity, fallback.severity),
+      timeWindow: normalizeTimeWindow(record.time_window ?? record.timeWindow ?? record.window, fallback.timeWindow),
+      affectedServices: hasAffectedList ? stringArray(affected, fallback.affectedServices) : fallback.affectedServices,
+      recentChanges: stringArray(recentChanges, fallback.recentChanges)
     };
   });
 }
@@ -214,7 +216,7 @@ function stringArray(value: unknown, fallback: string[]): string[] {
   return fallback;
 }
 
-function normalizeTimeWindow(value: unknown): string {
+function normalizeTimeWindow(value: unknown, fallback = demoScenarios[0].timeWindow): string {
   if (typeof value === "string" && value.trim()) {
     return value;
   }
@@ -222,7 +224,7 @@ function normalizeTimeWindow(value: unknown): string {
   const record = getRecord(value);
   const start = stringValue(record.start, "");
   const end = stringValue(record.end, "");
-  return start && end ? `${start}-${end}` : demoScenarios[0].timeWindow;
+  return start && end ? `${start}-${end}` : fallback;
 }
 
 function humanize(id: string): string {
