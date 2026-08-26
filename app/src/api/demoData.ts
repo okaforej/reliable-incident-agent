@@ -43,53 +43,9 @@ export const demoEdges: ServiceEdge[] = [
 
 export const demoComparison: Comparison = {
   scenarioId: "checkout_db_pool_exhaustion",
-  weak: {
-    mode: "weak",
-    runId: "demo-weak",
-    trace: {
-      incidentId: "inc-checkout-001",
-      incidentDescription:
-        "Checkout p95 latency and intermittent 5xx responses spiked during the incident window.",
-      toolCalls: [
-        {
-          sequence: 1,
-          toolName: "get_service_health",
-          arguments: { service: "checkout" },
-          result: {
-            status: "degraded",
-            summary: "checkout p95 latency exceeded SLO and error rate rose above baseline",
-            evidence_id: "metric.checkout.latency.p95"
-          }
-        },
-        {
-          sequence: 2,
-          toolName: "search_logs",
-          arguments: { service: "checkout", query: "timeout" },
-          result: {
-            matches: 12,
-            summary: "timeout errors observed while waiting for database connections",
-            evidence_id: "log.checkout.db-timeout"
-          }
-        }
-      ],
-      finalRootCause: rootCause
-    },
-    evaluation: {
-      rcaCorrect: true,
-      grounded: false,
-      investigationSufficient: false,
-      toolEfficient: true,
-      behavioralSloPass: false,
-      reasons: [
-        "RCA matches the expected root cause.",
-        "Trace did not retrieve postgres saturation evidence.",
-        "Trace did not retrieve the checkout configuration change that distinguishes cause from symptom."
-      ]
-    }
-  },
-  reliable: {
-    mode: "reliable",
-    runId: "demo-reliable",
+  baseline: {
+    mode: "baseline",
+    runId: "demo-baseline",
     trace: {
       incidentId: "inc-checkout-001",
       incidentDescription:
@@ -155,8 +111,42 @@ export const demoComparison: Comparison = {
       behavioralSloPass: true,
       reasons: [
         "RCA matches the expected root cause.",
-        "Trace retrieved checkout, postgres, and deployment evidence.",
-        "Trace distinguished collateral payments symptoms from the initiating postgres saturation."
+        "Version A retrieves checkout, postgres, and deployment evidence.",
+        "Version A distinguishes collateral payments symptoms from the initiating postgres saturation."
+      ]
+    }
+  },
+  candidate: {
+    mode: "candidate",
+    runId: "demo-candidate",
+    trace: {
+      incidentId: "inc-checkout-001",
+      incidentDescription:
+        "Checkout p95 latency and intermittent 5xx responses spiked during the incident window.",
+      toolCalls: [
+        {
+          sequence: 1,
+          toolName: "search_logs",
+          arguments: { service: "checkout", query: "timeout" },
+          result: {
+            matches: 12,
+            summary: "timeout errors observed while waiting for database connections",
+            evidence_id: "log.checkout.db-timeout"
+          }
+        }
+      ],
+      finalRootCause: rootCause
+    },
+    evaluation: {
+      rcaCorrect: true,
+      grounded: false,
+      investigationSufficient: false,
+      toolEfficient: true,
+      behavioralSloPass: false,
+      reasons: [
+        "RCA matches the expected root cause.",
+        "Version B stops after checkout-local timeout evidence and does not retrieve postgres saturation evidence.",
+        "Version B misses the checkout configuration change that distinguishes cause from symptom."
       ]
     }
   }

@@ -72,19 +72,42 @@ function normalizeScenarios(payload: unknown): Scenario[] {
 
 function normalizeComparison(payload: unknown, scenarioId: string): Comparison {
   const record = getRecord(payload);
-  const weakPayload =
-    record.weak ?? record.weak_run ?? record.weakInvestigation ?? findRun(record.runs, "weak") ?? getRecord(record.comparison).weak;
-  const reliablePayload =
-    record.reliable ??
-    record.reliable_run ??
-    record.reliableInvestigation ??
-    findRun(record.runs, "reliable") ??
-    getRecord(record.comparison).reliable;
+  const comparisonRecord = getRecord(record.comparison);
+  const baselinePayload =
+    record.baseline ??
+    record.baseline_run ??
+    record.baselineRun ??
+    record.baselineInvestigation ??
+    record.version_a ??
+    record.versionA ??
+    comparisonRecord.baseline ??
+    comparisonRecord.baseline_run ??
+    comparisonRecord.baselineRun ??
+    comparisonRecord.baselineInvestigation ??
+    comparisonRecord.version_a ??
+    comparisonRecord.versionA ??
+    findRun(record.runs, ["baseline", "version_a", "versionA"]) ??
+    findRun(comparisonRecord.runs, ["baseline", "version_a", "versionA"]);
+  const candidatePayload =
+    record.candidate ??
+    record.candidate_run ??
+    record.candidateRun ??
+    record.candidateInvestigation ??
+    record.version_b ??
+    record.versionB ??
+    comparisonRecord.candidate ??
+    comparisonRecord.candidate_run ??
+    comparisonRecord.candidateRun ??
+    comparisonRecord.candidateInvestigation ??
+    comparisonRecord.version_b ??
+    comparisonRecord.versionB ??
+    findRun(record.runs, ["candidate", "version_b", "versionB"]) ??
+    findRun(comparisonRecord.runs, ["candidate", "version_b", "versionB"]);
 
   return {
     scenarioId: stringValue(record.scenario_id ?? record.scenarioId, scenarioId),
-    weak: normalizeRun(weakPayload, "weak", demoComparison.weak),
-    reliable: normalizeRun(reliablePayload, "reliable", demoComparison.reliable)
+    baseline: normalizeRun(baselinePayload, "baseline", demoComparison.baseline),
+    candidate: normalizeRun(candidatePayload, "candidate", demoComparison.candidate)
   };
 }
 
@@ -144,12 +167,12 @@ function normalizeEvaluation(payload: unknown, fallback: BehavioralEvaluation): 
   };
 }
 
-function findRun(payload: unknown, mode: AgentMode): unknown {
+function findRun(payload: unknown, modes: string[]): unknown {
   if (!Array.isArray(payload)) {
     return undefined;
   }
 
-  return payload.find((item) => stringValue(getRecord(item).mode, "") === mode);
+  return payload.find((item) => modes.includes(stringValue(getRecord(item).mode, "")));
 }
 
 function getRecord(value: unknown): Record<string, unknown> {

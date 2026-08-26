@@ -6,17 +6,17 @@
 
 **Tagline:** Right answer, right reasons.
 
-Reliable Incident Agent is a local, enterprise-style prototype for evaluating incident-investigation agents. It demonstrates that final RCA correctness is not sufficient: an agent can reach the correct root cause through a weak investigation, while a reliable agent gathers evidence that supports and distinguishes the answer.
+Reliable Incident Agent is a local, enterprise-style prototype for reliability engineering of incident-investigation agents. It demonstrates that final RCA correctness is not sufficient: a candidate model, prompt, tool, or workflow configuration can still produce the correct root cause while regressing in the quality of its investigation.
 
 The prototype presents a complete incident replay workflow:
 
 ```text
 Select incident replay
-  -> run weak and reliable investigations
+  -> run baseline and candidate investigator configurations
   -> inspect tool-call trajectories
   -> review RCA
   -> evaluate behavioral SLIs
-  -> compare "correct answer, wrong reasons" against "correct answer, right reasons"
+  -> reveal behavioral reliability differences hidden by RCA accuracy
 ```
 
 ## 2. Product Goals
@@ -42,18 +42,18 @@ Agentic incident response adds a second reliability question:
 Did the agent behave reliably while reaching its answer?
 ```
 
-The demo must make this distinction visible:
+The demo must make this regression visible:
 
 ```text
-Weak trajectory:
-  RCA correct
-  Evidence insufficient
-  Behavioral SLO FAIL
-
-Reliable trajectory:
+Baseline configuration:
   RCA correct
   Evidence grounded and sufficient
   Behavioral SLO PASS
+
+Candidate configuration:
+  RCA correct
+  Evidence insufficient
+  Behavioral SLO FAIL
 ```
 
 ## 4. Target Audience
@@ -181,7 +181,7 @@ SQLite should contain enough operational evidence to support the demo:
 | `logs` | Structured log events |
 | `changes` | Deployments/config changes during the incident window |
 | `expected_outcomes` | Evaluation-only RCA target |
-| `investigation_runs` | Persisted weak/reliable run metadata |
+| `investigation_runs` | Persisted baseline/candidate run metadata |
 | `tool_calls` | Persisted observed tool-call results |
 | `evaluations` | Persisted behavioral evaluation output |
 
@@ -191,14 +191,14 @@ Incident scenarios and evaluation trajectories are separate concepts:
 
 ```text
 Scenario A: checkout_db_pool_exhaustion
-  -> weak trajectory: correct RCA, Behavioral SLO FAIL
-  -> reliable trajectory: correct RCA, Behavioral SLO PASS
+  -> baseline trajectory: correct RCA, Behavioral SLO PASS
+  -> candidate trajectory: correct RCA, Behavioral SLO FAIL
 
 Scenario B: payments_gateway_timeout
-  -> reliable trajectory: different valid investigation path, Behavioral SLO PASS
+  -> baseline trajectory: different valid investigation path, Behavioral SLO PASS
 
 Scenario C: insufficient_frontend_evidence
-  -> reliable trajectory: avoids unjustified RCA, Behavioral SLO PASS
+  -> baseline trajectory: avoids unjustified RCA, Behavioral SLO PASS
 ```
 
 ## 9. Shared Contracts
@@ -233,7 +233,7 @@ BehavioralEvaluation:
 
 InvestigationRequest:
     scenario_id: str
-    mode: Literal["weak", "reliable"]
+    mode: Literal["baseline", "candidate"]
 
 InvestigationResponse:
     run_id: str
@@ -251,21 +251,21 @@ FastAPI exposes these endpoints:
 | `GET` | `/scenarios` | List available replay scenarios |
 | `GET` | `/scenarios/{scenario_id}` | Read scenario summary and incident context |
 | `GET` | `/scenarios/{scenario_id}/evidence` | Read replay evidence for UI charts |
-| `POST` | `/investigations` | Run one weak or reliable investigation |
+| `POST` | `/investigations` | Run one baseline or candidate investigation |
 | `GET` | `/investigations/{run_id}` | Read a persisted investigation trace |
 | `GET` | `/investigations/{run_id}/evaluation` | Read persisted behavioral evaluation |
-| `GET` | `/comparisons/{scenario_id}` | Return weak and reliable traces plus evaluations |
+| `GET` | `/comparisons/{scenario_id}` | Return baseline and candidate traces plus evaluations |
 
 `POST /investigations` accepts:
 
 ```json
 {
   "scenario_id": "checkout_db_pool_exhaustion",
-  "mode": "reliable"
+  "mode": "baseline"
 }
 ```
 
-`GET /comparisons/checkout_db_pool_exhaustion` is the main endpoint for the weak-vs-reliable comparison demo. The UI should also allow selecting and running the other scenarios to show the runtime is not hard-coded to the DB incident.
+`GET /comparisons/checkout_db_pool_exhaustion` is the main endpoint for the baseline-vs-candidate regression demo. The UI should also allow selecting and running the other scenarios to show the runtime is not hard-coded to the DB incident.
 
 ## 11. Observability Tools
 
@@ -283,22 +283,11 @@ Tool results must be structured and include stable evidence IDs where available.
 
 ## 12. Investigation Modes
 
-The prototype includes deterministic modes. The required weak-vs-reliable contrast is centered on `checkout_db_pool_exhaustion`; the other scenarios demonstrate different investigation paths and inconclusive-evidence behavior.
+The prototype includes deterministic investigator configurations. The required baseline-vs-candidate contrast is centered on `checkout_db_pool_exhaustion`; the other scenarios demonstrate different investigation paths and inconclusive-evidence behavior.
 
-### Weak Mode
+### Baseline Configuration
 
-Purpose: demonstrate a correct answer reached through insufficient investigation.
-
-Expected behavior:
-
-- performs one or two plausible but insufficient tool calls;
-- returns the same correct RCA as reliable mode;
-- lacks enough evidence to support and distinguish the RCA;
-- fails groundedness and/or sufficiency.
-
-### Reliable Mode
-
-Purpose: demonstrate evidence-grounded investigation.
+Purpose: represent the current accepted investigator behavior.
 
 Expected behavior:
 
@@ -307,12 +296,23 @@ Expected behavior:
 - retrieves postgres saturation evidence;
 - retrieves checkout DB pool configuration change;
 - distinguishes collateral payments symptoms from initiating failure;
-- returns the same final RCA as weak mode;
+- returns the correct final RCA;
 - passes behavioral SLOs.
 
-For `payments_gateway_timeout`, reliable mode should follow checkout symptoms to payments, retrieve payments logs/metrics/changes, and avoid blaming postgres.
+### Candidate Configuration
 
-For `insufficient_frontend_evidence`, reliable mode should gather available frontend evidence and return an inconclusive RCA instead of fabricating a precise root cause.
+Purpose: represent a plausible model/prompt/tool configuration change that preserves output accuracy but regresses investigation behavior.
+
+Expected behavior:
+
+- performs a plausible shortcut investigation;
+- returns the same correct RCA as baseline mode;
+- lacks enough evidence to support and distinguish the RCA;
+- fails groundedness and/or sufficiency.
+
+For `payments_gateway_timeout`, baseline mode should follow checkout symptoms to payments, retrieve payments logs/metrics/changes, and avoid blaming postgres.
+
+For `insufficient_frontend_evidence`, baseline mode should gather available frontend evidence and return an inconclusive RCA instead of fabricating a precise root cause.
 
 ## 13. Behavioral Evaluation
 
@@ -357,7 +357,7 @@ Required regions:
 | Evidence panel | Metric charts, log highlights, change marker |
 | Graph panel | Service topology and/or investigation trajectory |
 | SLO panel | RCA correctness, groundedness, sufficiency, efficiency, behavioral SLO |
-| Comparison panel | Weak vs reliable trajectory comparison |
+| Comparison panel | Baseline vs candidate trajectory comparison |
 
 ### Main User Flow
 
@@ -365,8 +365,8 @@ Required regions:
 Open app
   -> select checkout_db_pool_exhaustion
   -> run comparison
-  -> review weak agent trajectory
-  -> review reliable agent trajectory
+  -> review baseline trajectory
+  -> review candidate trajectory
   -> inspect evidence charts and topology
   -> present behavioral SLO result
 ```
@@ -391,7 +391,7 @@ The UI should feel like an enterprise operations console:
 - restrained color palette;
 - compact cards and tables;
 - clear status badges;
-- small multiples for weak vs reliable comparison;
+- small multiples for baseline vs candidate comparison;
 - charts that directly support the RCA.
 
 The first screen should show the actual product workflow, not a marketing page.
@@ -401,12 +401,12 @@ The first screen should show the actual product workflow, not a marketing page.
 The main comparison must show:
 
 ```text
-                 Weak Agent      Reliable Agent
-RCA correct      PASS            PASS
-Grounded         FAIL            PASS
-Sufficient       FAIL            PASS
+                 Baseline        Candidate
+RCA accuracy     PASS            PASS
+Grounded         PASS            FAIL
+Sufficient       PASS            FAIL
 Efficient        PASS            PASS
-Behavioral SLO   FAIL            PASS
+Behavioral SLO   PASS            FAIL
 ```
 
 Both agents must produce the same final RCA:
@@ -421,10 +421,10 @@ Required tests:
 
 1. SQLite seed creates required tables and scenario data.
 2. Pydantic models validate trace and evaluation payloads.
-3. Weak investigation returns the expected RCA.
-4. Reliable investigation returns the same expected RCA.
-5. Weak investigation fails behavioral SLO.
-6. Reliable investigation passes behavioral SLO.
+3. Baseline investigation returns the expected RCA.
+4. Candidate investigation returns the same expected RCA.
+5. Baseline investigation passes behavioral SLO.
+6. Candidate investigation fails behavioral SLO.
 7. Incorrect RCA fails correctness while behavior metrics remain independently reported.
 8. Evaluator ignores hidden evidence that was not retrieved by tool calls.
 9. FastAPI comparison endpoint returns both traces and evaluations.
@@ -448,7 +448,7 @@ Expected behavior:
 - `make seed` creates `var/replays.sqlite`.
 - `make api` starts FastAPI.
 - `make app` starts the React UI.
-- `make demo` runs the weak vs reliable comparison from CLI.
+- `make demo` runs the baseline vs candidate comparison from CLI.
 - `make test` runs backend and evaluator tests.
 
 ## 18. Waterfall Build Plan
@@ -485,7 +485,7 @@ Deliverables:
 
 - SQLAlchemy repository.
 - observability tools.
-- weak and reliable investigator modes.
+- baseline and candidate investigator configurations.
 - behavioral evaluator.
 - FastAPI endpoints.
 
@@ -545,27 +545,55 @@ The project is complete when:
 
 1. `make install`, `make seed`, `make test`, and the UI run commands work on a clean checkout.
 2. The React UI displays the incident replay and comparison workflow.
-3. The backend runs weak and reliable investigations against SQLite replay data.
+3. The backend runs baseline and candidate investigator configurations against SQLite replay data.
 4. Tool calls are captured in `InvestigationTrace`.
 5. The evaluator consumes only observed trace evidence plus expected outcome.
-6. The comparison shows correct RCA with failing behavior for weak mode.
-7. The comparison shows correct RCA with passing behavior for reliable mode.
+6. The comparison shows correct RCA with passing behavior for baseline mode.
+7. The comparison shows correct RCA with failing behavior for candidate mode.
 8. README explains the architecture, thesis, run commands, limitations, and next steps.
 
-## 21. Engineer Coordination Status
+## 21. Engineering Handoff
 
-### Copilot Evaluation Slice
+All implementation work should optimize for the reliability-regression story:
 
-Status: integrated and passing focused tests.
+```text
+Baseline RCA:  PASS
+Candidate RCA: PASS
 
-- API: `evaluate_trace(trace: InvestigationTrace, expected: ExpectedOutcome) -> BehavioralEvaluation`.
-- The evaluator reads only `InvestigationTrace.tool_calls` plus `ExpectedOutcome`; it does not query SQLite or replay repositories.
-- Informative results support both runtime envelopes (`metrics`, `matches`) and normalized observed-evidence fields (`points`, `events`).
-- Behavioral sufficiency requires informative topology, runtime-signal, and change evidence, without prescribing tool order.
-- Efficiency independently detects duplicate calls, unknown tools, and trajectories exceeding the eight-call budget.
-- Focused evaluator tests: 5 passed.
-- Runtime/evaluator integration tests: 3 passed, including weak FAIL and reliable PASS.
-- Full Python suite: 13 passed.
-- Ruff: all checks passed across `src`, `tests`, and `scripts`.
+Output-only evaluation says: equivalent.
+Behavioral SLOs reveal: candidate regressed.
+```
 
-Integration note for Codex: stable evidence IDs would improve UI citations, but they are not required by the current evaluator contract and are not a blocker.
+### Evaluation Slice
+
+The evaluator owns behavioral SLI scoring over observed trajectories.
+
+Required behavior:
+
+- consume `InvestigationTrace + ExpectedOutcome`;
+- report RCA accuracy separately from Behavioral SLO pass/fail;
+- score only retrieved tool-call evidence;
+- avoid reading SQLite, seed SQL, hidden evidence, or replay repositories for groundedness;
+- keep reasons concise and evidence-oriented;
+- keep configuration labels out of evaluator reasons so the evaluator does not prejudge baseline or candidate.
+
+Required tests:
+
+- baseline and candidate both produce correct RCA;
+- baseline passes behavioral SLO;
+- candidate fails groundedness and/or investigation sufficiency;
+- evaluator ignores hidden evidence not present in `tool_calls`;
+- payments scenario passes through a different dependency path;
+- insufficient-evidence scenario passes by avoiding an unjustified RCA.
+
+### Runtime And UI Slice
+
+The runtime and UI own the demo reveal.
+
+Required behavior:
+
+- run both configurations against the same incident replay and same available evidence;
+- show RCA accuracy first for both configurations;
+- reveal Behavioral SLO results after RCA accuracy;
+- let the trajectory explain why the candidate regressed;
+- expose the additional scenarios so the implementation does not appear fitted to one incident type.

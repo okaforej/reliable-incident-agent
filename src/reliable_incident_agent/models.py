@@ -46,7 +46,7 @@ class InvestigationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     scenario_id: str
-    mode: Literal["weak", "reliable"]
+    mode: Literal["baseline", "candidate"]
 
 
 class InvestigationResponse(BaseModel):
@@ -94,5 +94,5 @@ class ComparisonResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     scenario_id: str
-    weak: InvestigationResponse
-    reliable: InvestigationResponse
+    baseline: InvestigationResponse
+    candidate: InvestigationResponse

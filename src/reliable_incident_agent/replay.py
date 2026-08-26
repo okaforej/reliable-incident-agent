@@ -335,7 +335,7 @@ class ReplayRepository:
             ToolCall(
                 sequence=row["sequence"],
                 tool_name=row["tool_name"],
-                arguments=_loads(row["arguments_json"], {}).get("arguments", {}),
+                arguments=_loads(row["arguments_json"], {}),
                 result=_loads(row["result_json"], {}),
             )
             for row in calls

@@ -32,7 +32,7 @@ def _incident_description(incident: dict[str, object]) -> str:
 
 def run_investigation(
     scenario_id: str,
-    mode: Literal["weak", "reliable"],
+    mode: Literal["baseline", "candidate"],
     repository: ReplayRepository | None = None,
 ) -> InvestigationTrace:
     repo = repository or ReplayRepository()
@@ -45,7 +45,7 @@ def run_investigation(
     if scenario_id == "insufficient_frontend_evidence":
         return _run_insufficient_frontend(incident, tools)
 
-    if mode == "weak":
+    if mode == "candidate":
         tools.search_logs("checkout", query="timeout")
         return InvestigationTrace(
             incident_id=str(incident["id"]),

@@ -46,18 +46,18 @@ def test_pydantic_models_validate_trace_evaluation_request_and_response() -> Non
     )
     request = validate_model(
         InvestigationRequest,
-        {"scenario_id": SCENARIO_ID, "mode": "reliable"},
+        {"scenario_id": SCENARIO_ID, "mode": "baseline"},
     )
     response = validate_model(
         InvestigationResponse,
         {
-            "run_id": "run-reliable-1",
+            "run_id": "run-baseline-1",
             "trace": dump_model(trace),
             "evaluation": dump_model(evaluation),
         },
     )
 
-    assert request.mode == "reliable"
+    assert request.mode == "baseline"
     assert response.trace.final_root_cause == EXPECTED_RCA
     assert response.evaluation.behavioral_slo_pass is True
 

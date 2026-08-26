@@ -76,8 +76,14 @@ def get_investigation_evaluation(run_id: str) -> dict[str, object]:
 
 @app.get("/comparisons/{scenario_id}", response_model=ComparisonResponse)
 def compare(scenario_id: str) -> ComparisonResponse:
-    weak = create_investigation(InvestigationRequest(scenario_id=scenario_id, mode="weak"))
-    reliable = create_investigation(
-        InvestigationRequest(scenario_id=scenario_id, mode="reliable")
+    baseline = create_investigation(
+        InvestigationRequest(scenario_id=scenario_id, mode="baseline")
     )
-    return ComparisonResponse(scenario_id=scenario_id, weak=weak, reliable=reliable)
+    candidate = create_investigation(
+        InvestigationRequest(scenario_id=scenario_id, mode="candidate")
+    )
+    return ComparisonResponse(
+        scenario_id=scenario_id,
+        baseline=baseline,
+        candidate=candidate,
+    )

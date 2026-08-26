@@ -1,29 +1,28 @@
 # Reliable Incident Agent
 
-Reliable Incident Agent is a local incident-replay prototype for evaluating
-agentic incident investigations. Its thesis is simple: final RCA correctness is
-not enough. An incident agent can guess the right root cause through a weak
-trajectory, while a reliable agent gathers evidence that supports and
-distinguishes the answer.
+Reliable Incident Agent is a local incident-replay prototype for reliability
+engineering of incident agents. Its thesis is simple: final RCA correctness is
+not enough. A candidate model, prompt, tool, or workflow change can preserve the
+same correct root cause while regressing in how the agent investigates.
 
-The demo compares weak and reliable behaviors on a deterministic DB-pool replay,
-then includes two additional replay scenarios to show the runtime is not
-hard-coded to one incident shape:
+The demo compares a baseline investigator configuration with a candidate
+configuration on a deterministic DB-pool replay, then includes two additional
+replay scenarios to show the runtime is not hard-coded to one incident shape:
 
 - `checkout_db_pool_exhaustion`: DB saturation after checkout pool config change.
 - `payments_gateway_timeout`: downstream payments/gateway timeout path.
 - `insufficient_frontend_evidence`: partial evidence where the agent should not overclaim.
 
 ```text
-Weak agent:
-  RCA correct
-  Evidence insufficient
-  Behavioral SLO FAIL
-
-Reliable agent:
+Baseline:
   RCA correct
   Evidence grounded and sufficient
   Behavioral SLO PASS
+
+Candidate:
+  RCA correct
+  Evidence insufficient
+  Behavioral SLO FAIL
 ```
 
 Both agents should produce the same RCA:
@@ -53,9 +52,9 @@ InvestigationTrace
 
 The replay database stores incident context, service topology, metrics, logs,
 changes, expected outcomes, investigation runs, tool calls, and evaluations.
-The investigator must read incident evidence only through observability tools.
+The investigator reads incident evidence only through observability tools.
 The evaluator receives only `InvestigationTrace + ExpectedOutcome`, so hidden
-seed evidence cannot rescue a weak investigation.
+seed evidence cannot mask a behavioral regression.
 
 ## Stack
 
@@ -89,7 +88,7 @@ Expected command behavior:
 - `make seed` creates `var/replays.sqlite`.
 - `make api` starts the FastAPI service.
 - `make app` starts the React UI.
-- `make demo` runs the weak vs reliable comparison from the CLI.
+- `make demo` runs the baseline vs candidate comparison from the CLI.
 - `make test` runs backend, evaluator, seed, and API contract tests.
 
 ## Demo Path
@@ -99,17 +98,19 @@ Expected command behavior:
 3. Open the incident command center.
 4. Select `checkout_db_pool_exhaustion`.
 5. Run the comparison.
-6. Show that both agents return the same RCA.
-7. Inspect the weak trajectory: one or two plausible tool calls, correct RCA,
+6. Show that both configurations return the same RCA.
+7. Establish that output-only RCA accuracy makes them appear equivalent.
+8. Reveal Behavioral SLO results: baseline passes and candidate fails.
+9. Inspect the candidate trajectory: a plausible shortcut, correct RCA,
    insufficient evidence, behavioral SLO fail.
-8. Inspect the reliable trajectory: checkout symptoms, dependency traversal to
+10. Inspect the baseline trajectory: checkout symptoms, dependency traversal to
    postgres, postgres connection saturation, checkout DB pool config change,
    collateral payments symptoms ruled out, behavioral SLO pass.
-9. Use the SLO panel to explain the core distinction: answer correctness is
+11. Use the SLO panel to explain the core distinction: answer correctness is
    reported separately from investigation reliability.
-10. Switch to `payments_gateway_timeout` to show a different valid path through
+12. Switch to `payments_gateway_timeout` to show a different valid path through
     the payments dependency.
-11. Switch to `insufficient_frontend_evidence` to show the agent avoiding an
+13. Switch to `insufficient_frontend_evidence` to show the agent avoiding an
     unjustified RCA when the replay lacks conclusive evidence.
 
 ## Expected Backend Interfaces
@@ -147,7 +148,7 @@ BehavioralEvaluation(
 
 InvestigationRequest(
     scenario_id: str,
-    mode: Literal["weak", "reliable"],
+    mode: Literal["baseline", "candidate"],
 )
 
 InvestigationResponse(
@@ -169,11 +170,11 @@ Runtime and API interfaces:
 ```json
 {
   "scenario_id": "checkout_db_pool_exhaustion",
-  "weak": {
+  "baseline": {
     "trace": {},
     "evaluation": {}
   },
-  "reliable": {
+  "candidate": {
     "trace": {},
     "evaluation": {}
   }
@@ -186,9 +187,9 @@ The contract tests cover:
 
 - SQLite seed DB exists and includes required tables plus scenario data.
 - Pydantic validation for trace, evaluation, request, and response models.
-- Weak and reliable investigations produce the same expected RCA.
-- Weak investigation fails the behavioral SLO.
-- Reliable investigation passes the behavioral SLO.
+- Baseline and candidate investigations produce the same expected RCA.
+- Baseline investigation passes the behavioral SLO.
+- Candidate investigation fails the behavioral SLO.
 - Incorrect RCA fails correctness while behavioral fields remain independently
   reported.
 - Evaluator ignores hidden evidence that was not retrieved by tool calls.

@@ -98,3 +98,16 @@ def test_valid_investigation_does_not_require_exact_tool_order() -> None:
     evaluation = evaluate_trace(make_trace(resequenced), expected_outcome())
 
     assert get_attr(evaluation, "behavioral_slo_pass") is True
+
+
+def test_evaluator_reports_behavior_without_prejudging_configuration() -> None:
+    evaluation = evaluate_trace(
+        make_trace(strong_evidence_tool_calls()),
+        expected_outcome(),
+    )
+
+    reasons = " ".join(get_attr(evaluation, "reasons")).lower()
+    assert all(
+        label not in reasons
+        for label in ("baseline", "candidate", "version a", "version b")
+    )

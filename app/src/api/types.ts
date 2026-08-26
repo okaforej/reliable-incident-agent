@@ -1,4 +1,4 @@
-export type AgentMode = "weak" | "reliable";
+export type AgentMode = "baseline" | "candidate";
 
 export type Scenario = {
   id: string;
@@ -42,8 +42,8 @@ export type InvestigationRun = {
 
 export type Comparison = {
   scenarioId: string;
-  weak: InvestigationRun;
-  reliable: InvestigationRun;
+  baseline: InvestigationRun;
+  candidate: InvestigationRun;
 };
 
 export type EvidencePoint = {

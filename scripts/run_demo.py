@@ -1,4 +1,4 @@
-"""CLI demo for weak vs reliable investigation comparison."""
+"""CLI demo for baseline vs candidate investigation comparison."""
 
 from __future__ import annotations
 
@@ -17,34 +17,34 @@ def main() -> None:
     init_db()
     repo = ReplayRepository()
     expected = repo.get_expected_outcome(SCENARIO_ID)
-    weak_trace = run_investigation(SCENARIO_ID, "weak", repo)
-    reliable_trace = run_investigation(SCENARIO_ID, "reliable", repo)
-    weak_eval = evaluate_trace(weak_trace, expected)
-    reliable_eval = evaluate_trace(reliable_trace, expected)
+    baseline_trace = run_investigation(SCENARIO_ID, "baseline", repo)
+    candidate_trace = run_investigation(SCENARIO_ID, "candidate", repo)
+    baseline_eval = evaluate_trace(baseline_trace, expected)
+    candidate_eval = evaluate_trace(candidate_trace, expected)
 
-    table = Table(title="Reliable Incident Agent: Same RCA, Different Trajectory")
+    table = Table(title="Reliable Incident Agent: Output Accuracy Hid a Regression")
     table.add_column("Metric")
-    table.add_column("Weak Agent")
-    table.add_column("Reliable Agent")
+    table.add_column("Baseline")
+    table.add_column("Candidate")
     rows = [
-        ("RCA correct", weak_eval.rca_correct, reliable_eval.rca_correct),
-        ("Grounded", weak_eval.grounded, reliable_eval.grounded),
-        ("Sufficient", weak_eval.investigation_sufficient, reliable_eval.investigation_sufficient),
-        ("Efficient", weak_eval.tool_efficient, reliable_eval.tool_efficient),
-        ("Behavioral SLO", weak_eval.behavioral_slo_pass, reliable_eval.behavioral_slo_pass),
+        ("RCA accuracy", baseline_eval.rca_correct, candidate_eval.rca_correct),
+        ("Grounded investigation", baseline_eval.grounded, candidate_eval.grounded),
+        ("Investigation sufficiency", baseline_eval.investigation_sufficient, candidate_eval.investigation_sufficient),
+        ("Tool efficiency", baseline_eval.tool_efficient, candidate_eval.tool_efficient),
+        ("Behavioral SLO", baseline_eval.behavioral_slo_pass, candidate_eval.behavioral_slo_pass),
     ]
-    for label, weak_value, reliable_value in rows:
-        table.add_row(label, _status(weak_value), _status(reliable_value))
+    for label, baseline_value, candidate_value in rows:
+        table.add_row(label, _status(baseline_value), _status(candidate_value))
 
     console = Console()
     console.print(table)
     console.print("\n[bold]Final RCA[/bold]")
-    console.print(reliable_trace.final_root_cause)
-    console.print("\n[bold]Weak evaluator reasons[/bold]")
-    for reason in weak_eval.reasons:
+    console.print(baseline_trace.final_root_cause)
+    console.print("\n[bold]Baseline evaluator reasons[/bold]")
+    for reason in baseline_eval.reasons:
         console.print(f"- {reason}")
-    console.print("\n[bold]Reliable evaluator reasons[/bold]")
-    for reason in reliable_eval.reasons:
+    console.print("\n[bold]Candidate evaluator reasons[/bold]")
+    for reason in candidate_eval.reasons:
         console.print(f"- {reason}")
 
 
