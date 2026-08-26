@@ -1,7 +1,6 @@
 .PHONY: install run seed api app build demo test live-smoke lint
 
-BUNDLED_PNPM := /Users/meka/.cache/codex-runtimes/codex-primary-runtime/dependencies/bin/fallback/pnpm
-PNPM ?= $(if $(wildcard $(BUNDLED_PNPM)),$(BUNDLED_PNPM),pnpm)
+PNPM ?= pnpm
 PYTHON ?= $(if $(wildcard .venv/bin/python),.venv/bin/python,python3)
 VENV ?= .venv
 PY_DEPS_STAMP := $(VENV)/.dependencies-installed
