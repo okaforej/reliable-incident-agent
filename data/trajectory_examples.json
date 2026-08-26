@@ -1,0 +1,81 @@
+{
+  "schema_version": "1.0",
+  "examples": [
+    {
+      "id": "trace_checkout_db_pool_strong",
+      "incident_id": "inc_checkout_db_pool_001",
+      "behavioral_quality": "strong",
+      "final_root_cause": "checkout latency was caused by postgres connection exhaustion after checkout deployed a database pool max_open_connections change from 20 to 80.",
+      "why_it_passes": [
+        "follows the frontend to checkout to postgres dependency path",
+        "checks metrics before blaming a recent change",
+        "distinguishes downstream payments cancellations from the initiating failure",
+        "ties the regression window to the checkout DB pool config change"
+      ],
+      "tool_calls": [
+        {
+          "sequence": 1,
+          "tool_name": "get_incident",
+          "arguments": { "incident_id": "inc_checkout_db_pool_001" },
+          "result": { "entry_service": "frontend", "symptoms": ["checkout latency", "HTTP 503"] }
+        },
+        {
+          "sequence": 2,
+          "tool_name": "get_dependencies",
+          "arguments": { "service": "frontend" },
+          "result": { "path": ["frontend", "checkout", "payments"], "alternate_dependency": ["checkout", "postgres"] }
+        },
+        {
+          "sequence": 3,
+          "tool_name": "get_metrics",
+          "arguments": { "incident_id": "inc_checkout_db_pool_001", "service": "checkout" },
+          "result": { "latency_p95_ms": 2980, "db_pool_wait_p95_ms": 2410 }
+        },
+        {
+          "sequence": 4,
+          "tool_name": "get_metrics",
+          "arguments": { "incident_id": "inc_checkout_db_pool_001", "service": "postgres" },
+          "result": { "active_connections": 100, "max_connections": 100 }
+        },
+        {
+          "sequence": 5,
+          "tool_name": "get_changes",
+          "arguments": { "incident_id": "inc_checkout_db_pool_001", "service": "checkout" },
+          "result": { "change_id": "chg_20260824_checkout_pool_80", "before": 20, "after": 80 }
+        },
+        {
+          "sequence": 6,
+          "tool_name": "search_logs",
+          "arguments": { "incident_id": "inc_checkout_db_pool_001", "service": "checkout", "query": "db acquire timeout" },
+          "result": { "log_id": "log_checkout_pool_wait_timeout", "wait_ms": 2000, "open_connections": 80 }
+        }
+      ]
+    },
+    {
+      "id": "trace_checkout_db_pool_weak",
+      "incident_id": "inc_checkout_db_pool_001",
+      "behavioral_quality": "weak",
+      "final_root_cause": "checkout latency was caused by postgres connection exhaustion after checkout deployed a database pool max_open_connections change from 20 to 80.",
+      "why_it_should_be_penalized": [
+        "starts from recent changes and jumps to the answer",
+        "does not inspect dependencies from frontend before selecting checkout",
+        "does not verify postgres saturation with metrics",
+        "does not rule out payments despite payments warnings"
+      ],
+      "tool_calls": [
+        {
+          "sequence": 1,
+          "tool_name": "get_changes",
+          "arguments": { "incident_id": "inc_checkout_db_pool_001" },
+          "result": { "change_id": "chg_20260824_checkout_pool_80", "service": "checkout" }
+        },
+        {
+          "sequence": 2,
+          "tool_name": "search_logs",
+          "arguments": { "incident_id": "inc_checkout_db_pool_001", "query": "timeout" },
+          "result": { "log_id": "log_checkout_pool_wait_timeout", "service": "checkout" }
+        }
+      ]
+    }
+  ]
+}

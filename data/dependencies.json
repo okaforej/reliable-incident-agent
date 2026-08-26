@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.0",
+  "services": [
+    {
+      "name": "frontend",
+      "type": "web",
+      "team": "storefront",
+      "calls": [
+        {
+          "service": "checkout",
+          "protocol": "http",
+          "critical_paths": [
+            "POST /checkout"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "checkout",
+      "type": "api",
+      "team": "orders",
+      "calls": [
+        {
+          "service": "payments",
+          "protocol": "http",
+          "critical_paths": [
+            "POST /payments/authorize"
+          ]
+        },
+        {
+          "service": "postgres",
+          "protocol": "postgres",
+          "critical_paths": [
+            "orders",
+            "carts",
+            "idempotency_keys"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "payments",
+      "type": "api",
+      "team": "payments",
+      "calls": [
+        {
+          "service": "external-card-gateway",
+          "protocol": "https",
+          "critical_paths": [
+            "card_authorization"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "postgres",
+      "type": "database",
+      "team": "platform-data",
+      "calls": []
+    }
+  ]
+}

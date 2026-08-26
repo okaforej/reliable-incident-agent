@@ -1,0 +1,95 @@
+{
+  "schema_version": "1.0",
+  "snapshots": [
+    {
+      "incident_id": "inc_checkout_db_pool_001",
+      "ts": "2026-08-24T09:25:00Z",
+      "services": [
+        {
+          "name": "frontend",
+          "status": "degraded",
+          "slo": "checkout p95 latency under 750ms",
+          "current": "3420ms"
+        },
+        {
+          "name": "checkout",
+          "status": "critical",
+          "slo": "api p95 latency under 500ms and error rate under 1 percent",
+          "current": "2980ms p95, 4.8 percent 503"
+        },
+        {
+          "name": "payments",
+          "status": "warning",
+          "slo": "authorization p95 latency under 400ms",
+          "current": "190ms p95, upstream cancellations elevated"
+        },
+        {
+          "name": "postgres",
+          "status": "critical",
+          "slo": "active connections below 85 percent of max_connections",
+          "current": "100 of 100 active connections"
+        }
+      ]
+    },
+    {
+      "incident_id": "inc_payments_gateway_002",
+      "ts": "2026-08-23T15:10:00Z",
+      "services": [
+        {
+          "name": "frontend",
+          "status": "degraded",
+          "slo": "checkout completion errors under 1 percent",
+          "current": "3.1 percent payment failures"
+        },
+        {
+          "name": "checkout",
+          "status": "degraded",
+          "slo": "payment dependency error rate under 1 percent",
+          "current": "3.1 percent payments 504"
+        },
+        {
+          "name": "payments",
+          "status": "critical",
+          "slo": "gateway timeout rate under 2 per minute",
+          "current": "42 per minute"
+        },
+        {
+          "name": "postgres",
+          "status": "healthy",
+          "slo": "active connections below 85 percent of max_connections",
+          "current": "44 of 100 active connections"
+        }
+      ]
+    },
+    {
+      "incident_id": "inc_frontend_cache_003",
+      "ts": "2026-08-22T11:36:00Z",
+      "services": [
+        {
+          "name": "frontend",
+          "status": "critical",
+          "slo": "product page error rate under 1 per minute",
+          "current": "37 per minute"
+        },
+        {
+          "name": "checkout",
+          "status": "healthy",
+          "slo": "api p95 latency under 500ms and error rate under 1 percent",
+          "current": "210ms p95, 0.1 percent errors"
+        },
+        {
+          "name": "payments",
+          "status": "healthy",
+          "slo": "authorization p95 latency under 400ms",
+          "current": "130ms p95"
+        },
+        {
+          "name": "postgres",
+          "status": "healthy",
+          "slo": "active connections below 85 percent of max_connections",
+          "current": "41 of 100 active connections"
+        }
+      ]
+    }
+  ]
+}
