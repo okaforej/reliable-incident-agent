@@ -25,7 +25,8 @@ Select incident replay
 2. Provide an enterprise-looking investigation console with clear workflow control.
 3. Use deterministic local incident replay so multiple agent trajectories are evaluated against identical operational evidence.
 4. Demonstrate trajectory-level behavioral evaluation over agent tool use.
-5. Keep the implementation reliable, local, and runnable without external services.
+5. Include multiple incident scenarios so the runtime does not look engineered around one answer.
+6. Keep the implementation reliable, local, and runnable without external services.
 
 ## 3. Core Thesis
 
@@ -159,11 +160,13 @@ tests/
 
 ## 8. Data Model
 
-The first scenario is:
+The replay database contains three scenarios:
 
-```text
-checkout_db_pool_exhaustion
-```
+| Scenario | Purpose |
+|---|---|
+| `checkout_db_pool_exhaustion` | Correlates checkout latency, postgres saturation, dependency topology, and a recent DB pool config change |
+| `payments_gateway_timeout` | Requires following checkout symptoms to a downstream payments dependency and gateway timeout change |
+| `insufficient_frontend_evidence` | Tests that the agent avoids overclaiming when available evidence is inconclusive |
 
 SQLite should contain enough operational evidence to support the demo:
 
@@ -183,6 +186,20 @@ SQLite should contain enough operational evidence to support the demo:
 | `evaluations` | Persisted behavioral evaluation output |
 
 The investigator runtime reads incident context and telemetry only through tool methods. Expected outcomes are loaded only after an investigation trace exists.
+
+Incident scenarios and evaluation trajectories are separate concepts:
+
+```text
+Scenario A: checkout_db_pool_exhaustion
+  -> weak trajectory: correct RCA, Behavioral SLO FAIL
+  -> reliable trajectory: correct RCA, Behavioral SLO PASS
+
+Scenario B: payments_gateway_timeout
+  -> reliable trajectory: different valid investigation path, Behavioral SLO PASS
+
+Scenario C: insufficient_frontend_evidence
+  -> reliable trajectory: avoids unjustified RCA, Behavioral SLO PASS
+```
 
 ## 9. Shared Contracts
 
@@ -248,7 +265,7 @@ FastAPI exposes these endpoints:
 }
 ```
 
-`GET /comparisons/{scenario_id}` is the main endpoint for the demo UI.
+`GET /comparisons/checkout_db_pool_exhaustion` is the main endpoint for the weak-vs-reliable comparison demo. The UI should also allow selecting and running the other scenarios to show the runtime is not hard-coded to the DB incident.
 
 ## 11. Observability Tools
 
@@ -266,7 +283,7 @@ Tool results must be structured and include stable evidence IDs where available.
 
 ## 12. Investigation Modes
 
-The prototype includes two deterministic modes for the same scenario.
+The prototype includes deterministic modes. The required weak-vs-reliable contrast is centered on `checkout_db_pool_exhaustion`; the other scenarios demonstrate different investigation paths and inconclusive-evidence behavior.
 
 ### Weak Mode
 
@@ -292,6 +309,10 @@ Expected behavior:
 - distinguishes collateral payments symptoms from initiating failure;
 - returns the same final RCA as weak mode;
 - passes behavioral SLOs.
+
+For `payments_gateway_timeout`, reliable mode should follow checkout symptoms to payments, retrieve payments logs/metrics/changes, and avoid blaming postgres.
+
+For `insufficient_frontend_evidence`, reliable mode should gather available frontend evidence and return an inconclusive RCA instead of fabricating a precise root cause.
 
 ## 13. Behavioral Evaluation
 
@@ -514,7 +535,6 @@ The prototype does not include:
 - live telemetry ingestion;
 - multi-tenant data storage;
 - deployment automation;
-- multiple incident scenarios;
 - model fine-tuning;
 - general-purpose chat memory;
 - production alerting or ticketing.
@@ -531,3 +551,21 @@ The project is complete when:
 6. The comparison shows correct RCA with failing behavior for weak mode.
 7. The comparison shows correct RCA with passing behavior for reliable mode.
 8. README explains the architecture, thesis, run commands, limitations, and next steps.
+
+## 21. Engineer Coordination Status
+
+### Copilot Evaluation Slice
+
+Status: integrated and passing focused tests.
+
+- API: `evaluate_trace(trace: InvestigationTrace, expected: ExpectedOutcome) -> BehavioralEvaluation`.
+- The evaluator reads only `InvestigationTrace.tool_calls` plus `ExpectedOutcome`; it does not query SQLite or replay repositories.
+- Informative results support both runtime envelopes (`metrics`, `matches`) and normalized observed-evidence fields (`points`, `events`).
+- Behavioral sufficiency requires informative topology, runtime-signal, and change evidence, without prescribing tool order.
+- Efficiency independently detects duplicate calls, unknown tools, and trajectories exceeding the eight-call budget.
+- Focused evaluator tests: 5 passed.
+- Runtime/evaluator integration tests: 3 passed, including weak FAIL and reliable PASS.
+- Full Python suite: 13 passed.
+- Ruff: all checks passed across `src`, `tests`, and `scripts`.
+
+Integration note for Codex: stable evidence IDs would improve UI citations, but they are not required by the current evaluator contract and are not a blocker.
