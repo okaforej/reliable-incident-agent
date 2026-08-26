@@ -9,6 +9,12 @@ by the quality of its investigation, not only its final answer.
 The replay, tool results, action state, and evaluator are deterministic. The LLM
 chooses its hypotheses, tools, evidence, and conclusion.
 
+## Demo
+
+![Completed incident investigation with grounded RCA and evidence](docs/images/incident-investigator.jpg)
+
+![Agent comparison with separate RCA and Behavioral SLO results](docs/images/compare-agent-versions.jpg)
+
 ## Product
 
 ### Incident Investigator
@@ -86,7 +92,9 @@ OPENAI_MODEL=<model> make run
 8. Open **Compare Agent Versions** and compare both trajectories.
 
 For credential-free demo insurance, `make demo` runs a clearly labelled recorded
-fake-provider comparison. It is never substituted for a failed live run.
+fake-provider comparison. Its proposed policy deliberately reaches the same RCA
+with a weaker evidence path, demonstrating regression detection. It is never
+substituted for a failed live run.
 
 ## Commands
 
@@ -122,6 +130,7 @@ COORDINATION.md                Product and architecture contract
 - Every investigation and comparison arm receives an isolated replay instance.
 - Chat cannot execute actions; the only rollback requires explicit confirmation.
 - API or provider failure never falls back silently to fixtures.
+- Provider requests and whole-run execution have explicit deadlines.
 - Raw chain-of-thought, evaluator truth, and credentials are never displayed.
 
 ## Deliberate Tradeoffs
@@ -132,8 +141,9 @@ COORDINATION.md                Product and architecture contract
   queue with restart recovery.
 - The evaluator is deterministic and scenario-calibrated, not a general incident
   correctness oracle.
-- Comparison execution is synchronous. Its UI shows honest elapsed progress but
-  does not fabricate per-agent streaming events.
+- Comparison execution is synchronous with a five-minute execution budget and
+  bounded provider requests. Its UI shows honest elapsed progress without
+  fabricating agent events.
 - Authentication, tenancy, RBAC, and generalized remediation are out of scope.
 
 See [COORDINATION.md](COORDINATION.md) for the concise architecture contract.

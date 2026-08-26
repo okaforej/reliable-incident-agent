@@ -208,6 +208,28 @@ def test_provider_failure_returns_503_without_secret(monkeypatch: pytest.MonkeyP
     assert secret not in detail
 
 
+def test_investigation_deadline_fails_without_model_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from reliable_incident_agent import api
+
+    provider = checkout_provider()
+    monkeypatch.setattr(api, "INVESTIGATION_DEADLINE_SECONDS", 0.0)
+    api.set_model_provider_factory(lambda: provider)
+    client = TestClient(api.app)
+
+    response = client.post(
+        "/investigations",
+        json={"scenario_id": PUBLIC_SCENARIO_ID, "mode": "candidate"},
+    )
+
+    assert response.status_code == 202
+    terminal = _wait_for_terminal(client, response.json()["run_id"])
+    assert terminal["status"] == "failed"
+    assert "execution deadline exceeded" in terminal["error"]
+    assert provider.requests == []
+
+
 def test_provider_key_error_returns_503_not_404() -> None:
     from reliable_incident_agent import api
 
@@ -325,6 +347,40 @@ def test_comparison_provider_key_error_returns_503_not_404() -> None:
 
     assert response.status_code == 503
     assert "provider lookup failed" in response.json()["detail"]
+
+
+def test_comparison_rejects_error_outcome_without_scoring_or_persisting() -> None:
+    from reliable_incident_agent import api
+
+    provider = fake_provider([provider_result(response_id="empty-response")])
+    api.set_model_provider_factory(lambda: provider)
+    client = TestClient(api.app)
+
+    response = client.post("/comparisons", json={"scenario_id": PUBLIC_SCENARIO_ID})
+
+    assert response.status_code == 503
+    assert "neither tool calls nor structured final output" in response.json()["detail"]
+    assert len(provider.requests) == 1
+    assert client.get("/comparisons").json() == []
+    assert client.get("/investigations").json() == []
+
+
+def test_comparison_deadline_fails_before_model_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from reliable_incident_agent import api
+
+    provider = checkout_provider()
+    monkeypatch.setattr(api, "COMPARISON_DEADLINE_SECONDS", 0.0)
+    api.set_model_provider_factory(lambda: provider)
+    client = TestClient(api.app)
+
+    response = client.post("/comparisons", json={"scenario_id": PUBLIC_SCENARIO_ID})
+
+    assert response.status_code == 503
+    assert "execution deadline exceeded" in response.json()["detail"]
+    assert provider.requests == []
+    assert client.get("/comparisons").json() == []
 
 
 def test_chat_can_return_action_proposal_without_executing_it() -> None:

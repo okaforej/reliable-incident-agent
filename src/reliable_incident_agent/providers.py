@@ -8,6 +8,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Optional, Protocol
 
+OPENAI_REQUEST_TIMEOUT_SECONDS = 90.0
+OPENAI_MAX_RETRIES = 1
+
 
 @dataclass(frozen=True)
 class ProviderToolCall:
@@ -103,7 +106,10 @@ class OpenAIResponsesProvider:
 
         from openai import OpenAI  # type: ignore[import-not-found]
 
-        self._client = OpenAI()
+        self._client = OpenAI(
+            timeout=OPENAI_REQUEST_TIMEOUT_SECONDS,
+            max_retries=OPENAI_MAX_RETRIES,
+        )
 
     def respond(
         self,

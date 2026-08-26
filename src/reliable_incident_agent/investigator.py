@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import time
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -95,6 +96,7 @@ def run_investigation(
     provider: Optional[ModelProvider] = None,
     replay_instance_id: Optional[str] = None,
     progress_callback: Optional[ProgressCallback] = None,
+    deadline_monotonic: Optional[float] = None,
 ) -> InvestigationTrace:
     scenario_id = internal_scenario_id(scenario_id)
     repo = repository or ReplayRepository()
@@ -111,6 +113,9 @@ def run_investigation(
     final_result: Optional[InvestigationFinalResult] = None
 
     for _turn in range(MAX_MODEL_TURNS):
+        if _deadline_reached(deadline_monotonic):
+            final_result = _error_result("Investigation execution deadline exceeded.")
+            break
         response = _provider_respond(
             model_provider,
             instructions=_instructions(config),
@@ -122,6 +127,10 @@ def run_investigation(
         input_tokens += response.input_tokens or 0
         output_tokens += response.output_tokens or 0
         latency_ms += response.latency_ms
+
+        if _deadline_reached(deadline_monotonic):
+            final_result = _error_result("Investigation execution deadline exceeded.")
+            break
 
         if response.tool_calls:
             if len([call for call in tools.calls if call.status == "ok"]) >= MAX_READ_TOOL_CALLS:
@@ -209,6 +218,10 @@ def run_investigation(
         provider_metadata=provider_metadata,
         final_root_cause=final_root_cause,
     )
+
+
+def _deadline_reached(deadline_monotonic: Optional[float]) -> bool:
+    return deadline_monotonic is not None and time.monotonic() >= deadline_monotonic
 
 
 def _emit_progress(

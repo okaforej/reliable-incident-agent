@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -302,6 +303,30 @@ def test_live_openai_provider_requires_explicit_model(monkeypatch: pytest.Monkey
 
     with pytest.raises(RuntimeError, match="OPENAI_MODEL"):
         OpenAIResponsesProvider()
+
+
+def test_live_openai_provider_uses_bounded_requests(monkeypatch: pytest.MonkeyPatch) -> None:
+    from reliable_incident_agent.providers import (
+        OPENAI_MAX_RETRIES,
+        OPENAI_REQUEST_TIMEOUT_SECONDS,
+        OpenAIResponsesProvider,
+    )
+
+    captured: dict[str, object] = {}
+
+    def create_client(**kwargs: object) -> object:
+        captured.update(kwargs)
+        return object()
+
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setitem(sys.modules, "openai", SimpleNamespace(OpenAI=create_client))
+
+    OpenAIResponsesProvider(model="test-openai-model")
+
+    assert captured == {
+        "timeout": OPENAI_REQUEST_TIMEOUT_SECONDS,
+        "max_retries": OPENAI_MAX_RETRIES,
+    }
 
 
 def test_insufficient_evidence_abstention_is_valid_behavior() -> None:

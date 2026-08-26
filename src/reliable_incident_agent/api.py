@@ -7,6 +7,7 @@ import os
 import threading
 import time
 from collections.abc import Callable
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,6 +36,7 @@ from .models import (
     InvestigationResponse,
     InvestigationRunStatus,
     InvestigationSummary,
+    InvestigationTrace,
     ScenarioDetail,
     ScenarioSummary,
 )
@@ -43,6 +45,8 @@ from .replay import ReplayRepository, internal_scenario_id, public_scenario_id
 
 ProviderFactory = Callable[[], ModelProvider]
 _provider_factory: ProviderFactory = default_provider
+INVESTIGATION_DEADLINE_SECONDS = 240.0
+COMPARISON_DEADLINE_SECONDS = 300.0
 
 app = FastAPI(title="Reliable Incident Agent", version="0.2.0")
 app.add_middleware(
@@ -216,8 +220,19 @@ def confirm_action(run_id: str, proposal_id: str) -> ActionConfirmationResponse:
 def create_comparison(request: ComparisonRequest) -> ComparisonResponse:
     repo = _repo()
     scenario_id = internal_scenario_id(request.scenario_id)
-    baseline = _create_investigation_with_repo(repo, scenario_id, "baseline")
-    candidate = _create_investigation_with_repo(repo, scenario_id, "candidate")
+    deadline_monotonic = time.monotonic() + COMPARISON_DEADLINE_SECONDS
+    baseline = _create_investigation_with_repo(
+        repo,
+        scenario_id,
+        "baseline",
+        deadline_monotonic,
+    )
+    candidate = _create_investigation_with_repo(
+        repo,
+        scenario_id,
+        "candidate",
+        deadline_monotonic,
+    )
     comparison_id = repo.persist_comparison(scenario_id, baseline, candidate)
     return ComparisonResponse(
         comparison_id=comparison_id,
@@ -244,6 +259,7 @@ def _create_investigation_with_repo(
     repo: ReplayRepository,
     scenario_id: str,
     mode: AgentMode,
+    deadline_monotonic: Optional[float] = None,
 ) -> InvestigationResponse:
     try:
         repo.get_scenario(scenario_id)
@@ -257,7 +273,9 @@ def _create_investigation_with_repo(
             repo,
             _provider(),
             replay_instance_id,
+            deadline_monotonic=deadline_monotonic,
         )
+        _raise_if_trace_failed(trace)
     except Exception as exc:
         raise _provider_unavailable(exc) from exc
     expected = repo.get_expected_outcome(scenario_id)
@@ -297,12 +315,9 @@ def _execute_pending_investigation(run_id: str) -> None:
                 summary,
                 payload,
             ),
+            deadline_monotonic=time.monotonic() + INVESTIGATION_DEADLINE_SECONDS,
         )
-        if trace.final_result.outcome == "error":
-            detail = trace.final_result.missing_evidence[0] if trace.final_result.missing_evidence else (
-                "Investigation failed before producing a defensible result."
-            )
-            raise RuntimeError(detail)
+        _raise_if_trace_failed(trace)
         # Evaluator-only truth is intentionally loaded only after the trace exists.
         expected = repo.get_expected_outcome(scope["scenario_id"])
         evaluation = evaluate_trace(trace, expected)
@@ -316,6 +331,15 @@ def _run_agent_mode(repo: ReplayRepository, run_id: str) -> AgentMode:
     if value not in ("baseline", "candidate"):
         raise ValueError("Investigation has an invalid agent configuration.")
     return value
+
+
+def _raise_if_trace_failed(trace: InvestigationTrace) -> None:
+    if trace.final_result.outcome != "error":
+        return
+    detail = trace.final_result.missing_evidence[0] if trace.final_result.missing_evidence else (
+        "Investigation failed before producing a defensible result."
+    )
+    raise RuntimeError(detail)
 
 
 def _require_completed(repo: ReplayRepository, run_id: str) -> None:

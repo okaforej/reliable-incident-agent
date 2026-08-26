@@ -130,6 +130,7 @@ model response
 Runtime requirements:
 
 - Maximum eight successful read-tool calls and bounded model turns.
+- Live provider requests and whole-run execution have explicit deadlines.
 - Validate tool names and arguments; reject unknown services and cross-scenario
   access.
 - Return structured tool errors to the model without crashing the run.
